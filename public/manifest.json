@@ -1,0 +1,13 @@
+{
+  "name": "Casita Aurora",
+  "short_name": "Casita Aurora",
+  "start_url": "/casita-aurora/",
+  "scope": "/casita-aurora/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": [
+    { "src": "/casita-aurora/icono-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/casita-aurora/icono-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
