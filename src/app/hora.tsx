@@ -2,10 +2,11 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 
-import { Acciones, Campo, Formulario, Opciones } from '@/componentes/formulario';
+import { CampoFecha } from '@/componentes/CampoFecha';
+import { Acciones, Campo, Formulario, Opciones, Seccion } from '@/componentes/formulario';
 import { useGuardado } from '@/componentes/useGuardado';
 import { useDatos } from '@/datos/DatosProvider';
-import { esFechaValida, hoyISO, nuevoId, numeroATexto, parsearNumero, textoONull } from '@/datos/formato';
+import { esFechaValida, hoyISO, nuevoId, numeroATexto, parsearNumero, simboloMoneda, textoONull } from '@/datos/formato';
 import { MONEDAS, PERSONAS, TIPOS_HORA, type HoraTrabajo, type Moneda, type Persona, type TipoHora } from '@/datos/tipos';
 
 export default function FormularioHora() {
@@ -16,7 +17,7 @@ export default function FormularioHora() {
   const [fecha, setFecha] = useState(existente?.fecha ?? hoyISO());
   const [persona, setPersona] = useState<Persona | null>(existente?.persona ?? null);
   const [tarea, setTarea] = useState(existente?.tarea ?? '');
-  const [tipo, setTipo] = useState<TipoHora | null>(existente?.tipo ?? null);
+  const [tipo, setTipo] = useState<TipoHora | null>(existente?.tipo ?? 'Changa / contratado');
   const [horas, setHoras] = useState(numeroATexto(existente?.horas ?? null));
   const [tarifa, setTarifa] = useState(numeroATexto(existente?.tarifa_hora ?? null));
   const [costo, setCosto] = useState(numeroATexto(existente?.costo ?? null));
@@ -30,11 +31,11 @@ export default function FormularioHora() {
     const horasNum = parsearNumero(horas);
     // Como en el Excel, el costo lo anota el usuario; las horas propias no tienen costo.
     const costoNum = esPropio ? 0 : parsearNumero(costo);
-    if (!esFechaValida(fecha)) return setError('La fecha tiene que ser AAAA-MM-DD, por ejemplo 2026-09-29.');
+    if (!esFechaValida(fecha)) return setError('Elegí una fecha válida.');
     if (!persona) return setError('Elegí quién trabajó.');
-    if (!tipo) return setError('Elegí el tipo de hora.');
-    if (horasNum === null) return setError('Las horas no son un número válido.');
-    if (costoNum === null) return setError('El costo no es un número válido.');
+    if (!tipo) return setError('Elegí si es propio o changa.');
+    if (horasNum === null) return setError('Escribí cuántas horas se trabajaron.');
+    if (costoNum === null) return setError('Escribí cuánto se pagó (por ejemplo 500.000).');
     if (!moneda) return setError('Elegí la moneda.');
 
     const hora: HoraTrabajo = {
@@ -55,6 +56,7 @@ export default function FormularioHora() {
         horas_trabajo: existente ? d.horas_trabajo.map((h) => (h.id === hora.id ? hora : h)) : [...d.horas_trabajo, hora],
       }),
       `${existente ? 'Editar' : 'Nueva'} jornada: ${hora.persona} ${hora.fecha}`,
+      existente ? 'Jornada actualizada' : 'Jornada guardada',
     );
   }
 
@@ -63,26 +65,32 @@ export default function FormularioHora() {
     void ejecutar(
       (d) => ({ ...d, horas_trabajo: d.horas_trabajo.filter((h) => h.id !== existente.id) }),
       `Eliminar jornada: ${existente.persona} ${existente.fecha}`,
+      'Jornada eliminada',
     );
   }
 
   return (
-    <Formulario>
+    <Formulario pie={<Acciones guardando={guardando} error={error} onGuardar={guardar} onEliminar={existente ? eliminar : undefined} />}>
       <Stack.Screen options={{ title: existente ? 'Editar jornada' : 'Nueva jornada' }} />
-      <Campo etiqueta="Fecha (AAAA-MM-DD)" valor={fecha} onCambio={setFecha} />
-      <Opciones etiqueta="Persona" opciones={PERSONAS} valor={persona} onCambio={setPersona} />
-      <Campo etiqueta="Etapa / tarea" valor={tarea} onCambio={setTarea} />
-      <Opciones etiqueta="Tipo" opciones={TIPOS_HORA} valor={tipo} onCambio={setTipo} />
-      <Campo etiqueta="Horas trabajadas" valor={horas} onCambio={setHoras} teclado="decimal-pad" />
+      <Seccion titulo="¿Quién trabajó?">
+        <Opciones etiqueta="Persona" opciones={PERSONAS} valor={persona} onCambio={setPersona} />
+        <Opciones etiqueta="Tipo" opciones={TIPOS_HORA} valor={tipo} onCambio={setTipo} />
+        <CampoFecha etiqueta="Fecha" valor={fecha} onCambio={setFecha} />
+      </Seccion>
+      <Seccion titulo="Trabajo" retraso={60}>
+        <Campo etiqueta="Etapa / tarea" valor={tarea} onCambio={setTarea} placeholder="Ej: Nivelación y limpieza" />
+        <Campo etiqueta="Horas trabajadas" valor={horas} onCambio={setHoras} teclado="decimal-pad" placeholder="0" />
+      </Seccion>
       {!esPropio && (
-        <>
-          <Campo etiqueta="Tarifa por hora (opcional)" valor={tarifa} onCambio={setTarifa} teclado="decimal-pad" />
-          <Campo etiqueta="Costo pagado" valor={costo} onCambio={setCosto} teclado="decimal-pad" placeholder="500.000" />
+        <Seccion titulo="Pago" retraso={120}>
+          <Campo etiqueta="Costo pagado" valor={costo} onCambio={setCosto} teclado="decimal-pad" placeholder="0" prefijo={simboloMoneda(moneda)} />
           <Opciones etiqueta="Moneda" opciones={MONEDAS} valor={moneda} onCambio={setMoneda} />
-        </>
+          <Campo etiqueta="Tarifa por hora" valor={tarifa} onCambio={setTarifa} teclado="decimal-pad" placeholder="Opcional" />
+        </Seccion>
       )}
-      <Campo etiqueta="Observaciones" valor={observaciones} onCambio={setObservaciones} multilinea />
-      <Acciones guardando={guardando} error={error} onGuardar={guardar} onEliminar={existente ? eliminar : undefined} />
+      <Seccion retraso={180}>
+        <Campo etiqueta="Observaciones" valor={observaciones} onCambio={setObservaciones} placeholder="Opcional" multilinea />
+      </Seccion>
     </Formulario>
   );
 }

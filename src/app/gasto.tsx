@@ -2,11 +2,12 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 
-import { Acciones, Campo, Formulario, Opciones } from '@/componentes/formulario';
+import { CampoFecha } from '@/componentes/CampoFecha';
+import { Acciones, Campo, Formulario, Opciones, Seccion } from '@/componentes/formulario';
 import { useGuardado } from '@/componentes/useGuardado';
 import { useDatos } from '@/datos/DatosProvider';
-import { esFechaValida, hoyISO, nuevoId, numeroATexto, parsearNumero, textoONull } from '@/datos/formato';
-import { ESTADOS_GASTO, MONEDAS, type EstadoGasto, type Gasto, type Moneda } from '@/datos/tipos';
+import { esFechaValida, hoyISO, nuevoId, numeroATexto, parsearNumero, simboloMoneda, textoONull } from '@/datos/formato';
+import { ESTADOS_GASTO, MONEDAS, UNIDADES_SUGERIDAS, type EstadoGasto, type Gasto, type Moneda } from '@/datos/tipos';
 
 export default function FormularioGasto() {
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -29,10 +30,10 @@ export default function FormularioGasto() {
 
   function guardar() {
     const montoNum = parsearNumero(monto);
-    if (!esFechaValida(fecha)) return setError('La fecha tiene que ser AAAA-MM-DD, por ejemplo 2026-09-29.');
+    if (!esFechaValida(fecha)) return setError('Elegí una fecha válida.');
     if (!categoria) return setError('Elegí una categoría.');
-    if (!material.trim()) return setError('Falta el material.');
-    if (montoNum === null) return setError('El monto no es un número válido.');
+    if (!material.trim()) return setError('Escribí qué material compraste.');
+    if (montoNum === null) return setError('Escribí el monto pagado (por ejemplo 248.000).');
     if (!moneda) return setError('Elegí la moneda.');
 
     const gasto: Gasto = {
@@ -55,29 +56,45 @@ export default function FormularioGasto() {
         gastos: existente ? d.gastos.map((g) => (g.id === gasto.id ? gasto : g)) : [...d.gastos, gasto],
       }),
       `${existente ? 'Editar' : 'Nuevo'} gasto: ${gasto.material}`,
+      existente ? 'Gasto actualizado' : 'Gasto guardado',
     );
   }
 
   function eliminar() {
     if (!existente) return;
-    void ejecutar((d) => ({ ...d, gastos: d.gastos.filter((g) => g.id !== existente.id) }), `Eliminar gasto: ${existente.material}`);
+    void ejecutar(
+      (d) => ({ ...d, gastos: d.gastos.filter((g) => g.id !== existente.id) }),
+      `Eliminar gasto: ${existente.material}`,
+      'Gasto eliminado',
+    );
   }
 
   return (
-    <Formulario>
+    <Formulario pie={<Acciones guardando={guardando} error={error} onGuardar={guardar} onEliminar={existente ? eliminar : undefined} />}>
       <Stack.Screen options={{ title: existente ? 'Editar gasto' : 'Nuevo gasto' }} />
-      <Campo etiqueta="Fecha (AAAA-MM-DD)" valor={fecha} onCambio={setFecha} />
-      <Opciones etiqueta="Categoría" opciones={categorias} valor={categoria} onCambio={setCategoria} />
-      <Campo etiqueta="Material" valor={material} onCambio={setMaterial} />
-      <Campo etiqueta="Descripción" valor={descripcion} onCambio={setDescripcion} />
-      <Campo etiqueta="Cantidad" valor={cantidad} onCambio={setCantidad} teclado="decimal-pad" />
-      <Campo etiqueta="Unidad" valor={unidad} onCambio={setUnidad} placeholder="kg, m², unidad, bolsa…" />
-      <Campo etiqueta="Monto pagado" valor={monto} onCambio={setMonto} teclado="decimal-pad" placeholder="248.000" />
-      <Opciones etiqueta="Moneda" opciones={MONEDAS} valor={moneda} onCambio={setMoneda} />
-      <Campo etiqueta="Proveedor" valor={proveedor} onCambio={setProveedor} />
-      <Opciones etiqueta="Estado" opciones={ESTADOS_GASTO} valor={estado} onCambio={setEstado} opcional />
-      <Campo etiqueta="Notas" valor={notas} onCambio={setNotas} multilinea />
-      <Acciones guardando={guardando} error={error} onGuardar={guardar} onEliminar={existente ? eliminar : undefined} />
+      <Seccion titulo="¿Qué compraste?">
+        <Campo etiqueta="Material" valor={material} onCambio={setMaterial} placeholder="Ej: Hormigón H21" />
+        <Opciones etiqueta="Categoría" opciones={categorias} valor={categoria} onCambio={setCategoria} />
+        <CampoFecha etiqueta="Fecha" valor={fecha} onCambio={setFecha} />
+      </Seccion>
+      <Seccion titulo="Pago" retraso={60}>
+        <Campo etiqueta="Monto pagado" valor={monto} onCambio={setMonto} teclado="decimal-pad" placeholder="0" prefijo={simboloMoneda(moneda)} />
+        <Opciones etiqueta="Moneda" opciones={MONEDAS} valor={moneda} onCambio={setMoneda} />
+        <Campo etiqueta="Proveedor" valor={proveedor} onCambio={setProveedor} placeholder="Opcional" />
+        <Opciones etiqueta="Estado" opciones={ESTADOS_GASTO} valor={estado} onCambio={setEstado} opcional />
+      </Seccion>
+      <Seccion titulo="Detalle" retraso={120}>
+        <Campo etiqueta="Cantidad" valor={cantidad} onCambio={setCantidad} teclado="decimal-pad" placeholder="Opcional" />
+        <Campo etiqueta="Unidad" valor={unidad} onCambio={setUnidad} placeholder="Opcional" />
+        <Opciones
+          opciones={UNIDADES_SUGERIDAS}
+          valor={(UNIDADES_SUGERIDAS as readonly string[]).includes(unidad) ? (unidad as (typeof UNIDADES_SUGERIDAS)[number]) : null}
+          onCambio={(u) => setUnidad(u ?? '')}
+          opcional
+        />
+        <Campo etiqueta="Descripción" valor={descripcion} onCambio={setDescripcion} placeholder="Opcional" />
+        <Campo etiqueta="Notas" valor={notas} onCambio={setNotas} placeholder="Opcional" multilinea />
+      </Seccion>
     </Formulario>
   );
 }

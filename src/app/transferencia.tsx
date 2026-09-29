@@ -2,7 +2,8 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 
-import { Acciones, Campo, Formulario, Opciones } from '@/componentes/formulario';
+import { CampoFecha } from '@/componentes/CampoFecha';
+import { Acciones, Campo, Formulario, Opciones, Seccion } from '@/componentes/formulario';
 import { useGuardado } from '@/componentes/useGuardado';
 import { useDatos } from '@/datos/DatosProvider';
 import { esFechaValida, hoyISO, nuevoId, numeroATexto, parsearNumero, textoONull } from '@/datos/formato';
@@ -37,11 +38,12 @@ export default function FormularioTransferencia() {
   function guardar() {
     const enviadoNum = parsearNumero(montoEnviado);
     const recibidoNum = parsearNumero(montoRecibido);
-    if (!esFechaValida(fecha)) return setError('La fecha tiene que ser AAAA-MM-DD, por ejemplo 2026-09-29.');
-    if (!destinatario) return setError('Elegí el destinatario.');
-    if (enviadoNum === null) return setError('El monto enviado no es un número válido.');
+    if (!esFechaValida(fecha)) return setError('Elegí una fecha válida.');
+    if (!destinatario) return setError('Elegí a quién se lo mandaste.');
+    if (enviadoNum === null) return setError('Escribí cuánto mandaste (por ejemplo 5.000).');
     if (!monedaEnviada) return setError('Elegí la moneda enviada.');
     if (montoRecibido.trim() && recibidoNum === null) return setError('El monto recibido no es un número válido.');
+    if (recibidoNum !== null && !monedaRecibida) return setError('Elegí la moneda recibida.');
 
     const transferencia: Transferencia = {
       id: existente?.id ?? nuevoId(),
@@ -63,6 +65,7 @@ export default function FormularioTransferencia() {
           : [...d.transferencias, transferencia],
       }),
       `${existente ? 'Editar' : 'Nueva'} transferencia: ${transferencia.monto_enviado} ${transferencia.moneda_enviada} a ${transferencia.destinatario}`,
+      existente ? 'Transferencia actualizada' : 'Transferencia guardada',
     );
   }
 
@@ -71,22 +74,28 @@ export default function FormularioTransferencia() {
     void ejecutar(
       (d) => ({ ...d, transferencias: d.transferencias.filter((t) => t.id !== existente.id) }),
       `Eliminar transferencia del ${existente.fecha}`,
+      'Transferencia eliminada',
     );
   }
 
   return (
-    <Formulario>
+    <Formulario pie={<Acciones guardando={guardando} error={error} onGuardar={guardar} onEliminar={existente ? eliminar : undefined} />}>
       <Stack.Screen options={{ title: existente ? 'Editar transferencia' : 'Nueva transferencia' }} />
-      <Campo etiqueta="Fecha (AAAA-MM-DD)" valor={fecha} onCambio={setFecha} />
-      <Opciones etiqueta="Destinatario" opciones={DESTINATARIOS} valor={destinatario} onCambio={setDestinatario} />
-      <Campo etiqueta="Monto enviado" valor={montoEnviado} onCambio={setMontoEnviado} teclado="decimal-pad" placeholder="5.000" />
-      <Opciones etiqueta="Moneda enviada" opciones={MONEDAS} valor={monedaEnviada} onCambio={setMonedaEnviada} />
-      <Campo etiqueta="Monto recibido (opcional)" valor={montoRecibido} onCambio={setMontoRecibido} teclado="decimal-pad" placeholder="854.000" />
-      <Opciones etiqueta="Moneda recibida" opciones={MONEDAS} valor={monedaRecibida} onCambio={setMonedaRecibida} opcional />
-      <Opciones etiqueta="Método de envío" opciones={METODOS_ENVIO} valor={metodo} onCambio={setMetodo} opcional />
-      <Opciones etiqueta="Para qué" opciones={PARA_QUE} valor={paraQue} onCambio={setParaQue} opcional />
-      <Campo etiqueta="Observaciones" valor={observaciones} onCambio={setObservaciones} multilinea />
-      <Acciones guardando={guardando} error={error} onGuardar={guardar} onEliminar={existente ? eliminar : undefined} />
+      <Seccion titulo="Envío">
+        <Opciones etiqueta="Para" opciones={DESTINATARIOS} valor={destinatario} onCambio={setDestinatario} />
+        <CampoFecha etiqueta="Fecha" valor={fecha} onCambio={setFecha} />
+        <Campo etiqueta="Monto enviado" valor={montoEnviado} onCambio={setMontoEnviado} teclado="decimal-pad" placeholder="0" />
+        <Opciones etiqueta="Moneda enviada" opciones={MONEDAS} valor={monedaEnviada} onCambio={setMonedaEnviada} />
+      </Seccion>
+      <Seccion titulo="Lo que llegó" retraso={60}>
+        <Campo etiqueta="Monto recibido" valor={montoRecibido} onCambio={setMontoRecibido} teclado="decimal-pad" placeholder="Opcional" />
+        <Opciones etiqueta="Moneda recibida" opciones={MONEDAS} valor={monedaRecibida} onCambio={setMonedaRecibida} opcional />
+      </Seccion>
+      <Seccion titulo="Detalle" retraso={120}>
+        <Opciones etiqueta="Para qué" opciones={PARA_QUE} valor={paraQue} onCambio={setParaQue} opcional />
+        <Opciones etiqueta="Método de envío" opciones={METODOS_ENVIO} valor={metodo} onCambio={setMetodo} opcional />
+        <Campo etiqueta="Observaciones" valor={observaciones} onCambio={setObservaciones} placeholder="Opcional" multilinea />
+      </Seccion>
     </Formulario>
   );
 }

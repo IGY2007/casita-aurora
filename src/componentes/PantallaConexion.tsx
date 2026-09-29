@@ -1,10 +1,13 @@
 // Formulario para conectar la app al repositorio privado de datos. Se completa una vez por dispositivo.
 import { useState } from 'react';
-import { Button, Text, TextInput, View } from 'react-native';
+import { Image, ScrollView, Text, View } from 'react-native';
 
 import { useDatos } from '@/datos/DatosProvider';
+import { colores, espacio, texto } from '@/tema';
 
-const estiloCampo = { borderWidth: 1, borderColor: '#999', padding: 8, marginBottom: 12 } as const;
+import { Acciones, Campo, Seccion } from './formulario';
+
+const logo = require('../../assets/icon.png');
 
 export function PantallaConexion() {
   const { configurar } = useDatos();
@@ -15,28 +18,30 @@ export function PantallaConexion() {
   const [conectando, setConectando] = useState(false);
 
   async function conectar() {
+    if (!propietario.trim() || !token.trim()) return setError('Completá el usuario y el token.');
     setConectando(true);
     setError(null);
     try {
       await configurar({ propietario: propietario.trim(), repositorio: repositorio.trim(), token: token.trim() });
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
+      setError(e instanceof TypeError ? 'Sin conexión a internet.' : e instanceof Error ? e.message : String(e));
       setConectando(false);
     }
   }
 
   return (
-    <View style={{ padding: 16 }}>
-      <Text style={{ fontSize: 20, marginBottom: 16 }}>Conectar con GitHub</Text>
-      <Text>Usuario de GitHub</Text>
-      <TextInput style={estiloCampo} value={propietario} onChangeText={setPropietario} autoCapitalize="none" autoCorrect={false} />
-      <Text>Repositorio de datos</Text>
-      <TextInput style={estiloCampo} value={repositorio} onChangeText={setRepositorio} autoCapitalize="none" autoCorrect={false} />
-      <Text>Token</Text>
-      <TextInput style={estiloCampo} value={token} onChangeText={setToken} autoCapitalize="none" autoCorrect={false} secureTextEntry />
-      <Button title={conectando ? 'Conectando…' : 'Conectar'} onPress={conectar} disabled={conectando || !propietario || !token} />
-      {error && <Text style={{ color: 'red', marginTop: 12 }}>{error}</Text>}
-    </View>
+    <ScrollView style={{ backgroundColor: colores.fondo }} contentContainerStyle={{ padding: espacio(5), paddingTop: espacio(16), gap: espacio(5) }}>
+      <View style={{ alignItems: 'center', gap: espacio(3) }}>
+        <Image source={logo} style={{ width: 96, height: 96, borderRadius: 48 }} />
+        <Text style={texto.titulo}>Casita Aurora</Text>
+        <Text style={[texto.secundario, { textAlign: 'center' }]}>Conectá la app con tu repositorio privado de GitHub. Se hace una sola vez.</Text>
+      </View>
+      <Seccion>
+        <Campo etiqueta="Usuario de GitHub" valor={propietario} onCambio={setPropietario} placeholder="IGY2007" />
+        <Campo etiqueta="Repositorio de datos" valor={repositorio} onCambio={setRepositorio} />
+        <Campo etiqueta="Token" valor={token} onCambio={setToken} placeholder="github_pat_…" />
+      </Seccion>
+      <Acciones guardando={conectando} error={error} onGuardar={conectar} />
+    </ScrollView>
   );
 }

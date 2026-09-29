@@ -24,10 +24,17 @@ App personal (Expo + React Native + TypeScript) para controlar los gastos y el a
 - `src/datos/github.ts`: leer y escribir `datos.json` (base64 UTF-8, `sha` para evitar pisar cambios).
 - `src/datos/almacenamientoLocal.ts`: configuración de GitHub y copia offline en `localStorage`.
 - `src/datos/DatosProvider.tsx`: contexto `useDatos()`. Para modificar datos, usar siempre `guardar(mutar, mensaje)`: relee la última versión, aplica el cambio y hace el commit.
-- `src/datos/formato.ts`: fechas, números en formato argentino (punto = miles, coma = decimales) e IDs.
-- `src/componentes/PantallaConexion.tsx`: formulario de usuario, repositorio y token.
-- `src/app/gasto.tsx`, `hora.tsx`, `transferencia.tsx`: formularios de alta/edición/baja (`?id=` para editar). Usan `src/componentes/formulario.tsx` (Campo, Opciones, Acciones) y `useGuardado.ts`.
-- `src/componentes/Lista.tsx`: lista de las tabs con botón "Agregar"; tocar una fila abre su formulario.
+- `src/datos/formato.ts`: fechas, números en formato argentino (punto = miles, coma = decimales), `formatoMoneda` e IDs.
+- `src/datos/calculos.ts`: fórmulas del Excel (resumen, presupuesto por etapa) y conversión con `tipos_cambio`.
+- `src/app/gasto.tsx`, `hora.tsx`, `transferencia.tsx`, `tipos-cambio.tsx`: formularios modales (`?id=` para editar). Usan `src/componentes/formulario.tsx` (Formulario, Seccion, Campo, Opciones, Acciones), `CampoFecha.tsx` y `useGuardado.ts` (guarda, muestra el aviso y vuelve).
+- `src/componentes/Lista.tsx`: listas de las tabs agrupadas por mes, con botón flotante "+"; tocar una fila abre su formulario.
+
+## Diseño
+
+- Todo color, radio, sombra y estilo de texto sale de `src/tema.ts` (claro con negro como el logo, acento verde-aurora `#2BB39A`). No hardcodear colores nuevos.
+- Componentes base en `src/componentes/`: `Tarjeta` (con animación de entrada), `BotonTactil`/`Tactil` (escala al tocar), `BotonFlotante`, `BarraProgreso`, `FilaRegistro`, `Encabezado`, `Aviso` (`useAviso()`), `iconos.ts` (ícono por categoría, Ionicons).
+- Animaciones con `Animated` de React Native y `useNativeDriver: false` (es web).
+- Las pantallas de tabs no usan header: dibujan su propio `Encabezado` respetando `useSafeAreaInsets()`.
 - `src/app/+html.tsx` y `public/`: ícono y manifest para la pantalla de inicio del iPhone. `BASE` en `+html.tsx` debe coincidir con `baseUrl`.
 
 Monedas: ARS, USD, EUR, NOK. Fechas en texto ISO `AAAA-MM-DD`. El presupuesto está en USD. Los IDs son UUID (`crypto.randomUUID()`).

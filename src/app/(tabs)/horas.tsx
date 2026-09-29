@@ -1,16 +1,20 @@
-// Horas: jornadas de trabajo, propias y changas, la más reciente primero (sin diseño todavía).
+// Horas: jornadas de trabajo, propias y changas, agrupadas por mes.
 import { Lista } from '@/componentes/Lista';
 import { useDatos } from '@/datos/DatosProvider';
 import { numeroATexto } from '@/datos/formato';
 
 export default function PantallaHoras() {
   const { datos } = useDatos();
-  const filas = [...(datos?.horas_trabajo ?? [])]
-    .sort((a, b) => b.fecha.localeCompare(a.fecha))
-    .map((h) => ({
-      id: h.id,
-      texto: `${h.fecha} · ${h.persona} · ${numeroATexto(h.horas)} hs · ${numeroATexto(h.costo)} ${h.moneda}`,
-    }));
+  const items = (datos?.horas_trabajo ?? []).map((h) => ({
+    id: h.id,
+    fecha: h.fecha,
+    icono: h.tipo === 'Propio (sin costo)' ? ('person-outline' as const) : ('construct-outline' as const),
+    titulo: h.tarea ?? h.persona,
+    subtitulo: `${h.persona} · ${numeroATexto(h.horas)} hs`,
+    monto: h.costo,
+    moneda: h.moneda,
+    detalleMonto: h.tipo === 'Propio (sin costo)' ? 'Propio' : 'Changa',
+  }));
 
-  return <Lista textoAgregar="+ Agregar jornada" formulario="/hora" filas={filas} textoVacio="Todavía no hay horas cargadas." />;
+  return <Lista titulo="Horas" formulario="/hora" items={items} textoVacio="Todavía no hay horas cargadas." iconoVacio="time-outline" />;
 }
