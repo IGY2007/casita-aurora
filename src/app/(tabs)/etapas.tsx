@@ -145,6 +145,13 @@ export default function PantallaEtapas() {
             <Text style={{ color: '#A8A8A8', fontSize: 13 }}>
               Comprado {formatoMoneda(compradoTotal, 'USD')} · pendiente {formatoMoneda(lista.subtotalGeneral - compradoTotal, 'USD')}
             </Text>
+            {lista.incompleto && (
+              <Tactil onPress={() => router.push('/tipos-cambio')}>
+                <Text style={{ color: colores.advertencia, fontSize: 13 }}>
+                  * Hay precios en una moneda sin tipo de cambio cargado; no suman. Tocá para cargarlo.
+                </Text>
+              </Tactil>
+            )}
           </View>
         )}
 

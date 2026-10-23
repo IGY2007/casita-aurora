@@ -53,10 +53,34 @@ function montoTransferencia(t: BaseDatos['transferencias'][number]): MontoConMon
 
 // --- Lista de materiales por etapa ---
 
-// Total estimado de un material: cantidad × precio unitario (sin cantidad cuenta como 1).
-export function totalMaterial(m: MaterialLista): number {
-  if (m.precio_unitario_usd === null) return 0;
-  return (m.cantidad ?? 1) * m.precio_unitario_usd;
+// Total estimado de un material en SU moneda: cantidad × precio unitario (sin cantidad cuenta como 1).
+export function totalMaterial(m: Pick<MaterialLista, 'cantidad' | 'precio_unitario'>): number {
+  if (m.precio_unitario === null) return 0;
+  return (m.cantidad ?? 1) * m.precio_unitario;
+}
+
+// Convierte un monto de cualquier moneda a USD pasando por pesos; null si falta un tipo de cambio.
+export function aUSD(monto: number, moneda: Moneda, tipos: TipoCambio[]): number | null {
+  if (moneda === 'USD') return monto;
+  const ars = aARS(monto, moneda, tipos);
+  return ars === null ? null : arsAUSD(ars, tipos);
+}
+
+// Total estimado de un material en USD (lo que usan los totales de etapas).
+export function totalMaterialUSD(m: MaterialLista, tipos: TipoCambio[]): number | null {
+  return aUSD(totalMaterial(m), m.moneda, tipos);
+}
+
+// Suma en USD; los que no se pueden convertir no suman y marcan el total como incompleto.
+function sumarUSD(materiales: MaterialLista[], tipos: TipoCambio[]): { usd: number; incompleto: boolean } {
+  let usd = 0;
+  let incompleto = false;
+  for (const m of materiales) {
+    const v = totalMaterialUSD(m, tipos);
+    if (v === null) incompleto = true;
+    else usd += v;
+  }
+  return { usd, incompleto };
 }
 
 export interface ResumenEtapa {
@@ -71,6 +95,8 @@ export interface ResumenEtapa {
   aComprar: number;
   gastadoReal: Total; // gastos cargados con esta etapa como categoría, en ARS
   gastadoRealUSD: number | null;
+  // true si algún material está en una moneda sin tipo de cambio cargado (no suma)
+  incompleto: boolean;
 }
 
 export interface ResumenLista {
@@ -78,6 +104,7 @@ export interface ResumenLista {
   subtotalGeneral: number;
   imprevistos: number;
   totalGeneral: number;
+  incompleto: boolean;
 }
 
 export function calcularLista(datos: BaseDatos): ResumenLista {
@@ -89,10 +116,12 @@ export function calcularLista(datos: BaseDatos): ResumenLista {
       datos.gastos.filter((g) => g.categoria === etapa.nombre),
       tipos,
     );
+    const subtotal = sumarUSD(aComprar, tipos);
     return {
       etapa,
-      subtotal: aComprar.reduce((s, m) => s + totalMaterial(m), 0),
-      compradoUSD: comprados.reduce((s, m) => s + totalMaterial(m), 0),
+      subtotal: subtotal.usd,
+      incompleto: subtotal.incompleto,
+      compradoUSD: sumarUSD(comprados, tipos).usd,
       comprados: comprados.length,
       aComprar: aComprar.length,
       gastadoReal,
@@ -114,7 +143,13 @@ export function calcularLista(datos: BaseDatos): ResumenLista {
     };
   });
 
-  return { etapas, subtotalGeneral, imprevistos, totalGeneral: subtotalGeneral + imprevistos };
+  return {
+    etapas,
+    subtotalGeneral,
+    imprevistos,
+    totalGeneral: subtotalGeneral + imprevistos,
+    incompleto: etapas.some((e) => e.incompleto),
+  };
 }
 
 // USD → EUR pasando por los tipos de cambio a pesos; null si falta alguno.

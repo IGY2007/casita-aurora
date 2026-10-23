@@ -11,26 +11,34 @@ import { Tactil } from '@/componentes/BotonTactil';
 import { Casilla } from '@/componentes/Casilla';
 import { Dialogo } from '@/componentes/Dialogo';
 import { Tarjeta } from '@/componentes/Tarjeta';
-import { calcularLista, totalMaterial } from '@/datos/calculos';
+import { aUSD, calcularLista, totalMaterial, totalMaterialUSD } from '@/datos/calculos';
 import { useDatos } from '@/datos/DatosProvider';
 import { formatoMoneda, numeroATexto } from '@/datos/formato';
-import type { MaterialLista } from '@/datos/tipos';
+import type { Gasto, MaterialLista, TipoCambio } from '@/datos/tipos';
 import { colores, espacio, radios, texto } from '@/tema';
 
 function detalleCantidad(m: MaterialLista): string {
   const partes: string[] = [];
   if (m.cantidad !== null) partes.push(`${numeroATexto(m.cantidad)} ${m.unidad ?? ''}`.trim());
-  if (m.precio_unitario_usd !== null) partes.push(`${formatoMoneda(m.precio_unitario_usd, 'USD')} c/u`);
+  if (m.precio_unitario !== null) partes.push(`${formatoMoneda(m.precio_unitario, m.moneda)} c/u`);
   return partes.join(' × ');
 }
 
 interface PropsFila {
   m: MaterialLista;
-  enGastos: boolean;
+  gasto: Gasto | undefined; // gasto vinculado, si se añadió a gastos
+  tipos: TipoCambio[];
   onMarcar: () => void;
 }
 
-function FilaMaterial({ m, enGastos, onMarcar }: PropsFila) {
+// Monto en su moneda, con el equivalente en dólares si es otra moneda.
+function conDolares(monto: number, moneda: Gasto['moneda'], tipos: TipoCambio[]): string {
+  const usd = moneda === 'USD' ? null : aUSD(monto, moneda, tipos);
+  return `${formatoMoneda(monto, moneda)}${usd !== null ? ` ≈ ${formatoMoneda(usd, 'USD')}` : ''}`;
+}
+
+function FilaMaterial({ m, gasto, tipos, onMarcar }: PropsFila) {
+  const totalUSD = m.moneda === 'USD' ? null : totalMaterialUSD(m, tipos);
   const abrir = () => router.push({ pathname: '/material', params: { id: m.id } });
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: espacio(3), paddingVertical: espacio(3) }}>
@@ -57,42 +65,50 @@ function FilaMaterial({ m, enGastos, onMarcar }: PropsFila) {
                 {m.observaciones}
               </Text>
             )}
-            {enGastos && (
+            {gasto && (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
                 <Ionicons name="receipt" size={12} color={colores.acento} />
-                <Text style={{ fontSize: 12, color: colores.acento, fontWeight: '600' }}>En gastos</Text>
+                <Text style={{ flexShrink: 1, fontSize: 12, color: colores.acento, fontWeight: '600' }}>
+                  En gastos · pagado {conDolares(gasto.monto, gasto.moneda, tipos)}
+                </Text>
               </View>
             )}
           </View>
-          <Text style={[texto.monto, m.disponible ? { color: colores.textoTenue, fontWeight: '400', fontSize: 14 } : null]}>
-            {m.precio_unitario_usd === null ? '—' : `${m.disponible ? 'ref. ' : ''}${formatoMoneda(totalMaterial(m), 'USD')}`}
-          </Text>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={[texto.monto, m.disponible ? { color: colores.textoTenue, fontWeight: '400', fontSize: 14 } : null]}>
+              {m.precio_unitario === null ? '—' : `${m.disponible ? 'ref. ' : ''}${formatoMoneda(totalMaterial(m), m.moneda)}`}
+            </Text>
+            {m.precio_unitario !== null && m.moneda !== 'USD' && (
+              <Text style={[texto.secundario, { fontSize: 12 }]}>{totalUSD !== null ? `≈ ${formatoMoneda(totalUSD, 'USD')}` : 'sin tipo de cambio'}</Text>
+            )}
+          </View>
         </Tactil>
       </View>
     </View>
   );
 }
 
-function Grupo({ titulo, subtitulo, materiales, retraso, enGastos, onMarcar }: {
+function Grupo({ titulo, subtitulo, materiales, retraso, gastoDe, tipos, onMarcar }: {
   titulo: string | null;
   subtitulo?: string;
   materiales: MaterialLista[];
   retraso: number;
-  enGastos: (m: MaterialLista) => boolean;
+  gastoDe: (m: MaterialLista) => Gasto | undefined;
+  tipos: TipoCambio[];
   onMarcar: (m: MaterialLista) => void;
 }) {
   return (
     <View style={{ gap: espacio(2) }}>
       {titulo && (
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: espacio(1) }}>
-          <Text style={texto.etiqueta}>{titulo}</Text>
-          {subtitulo && <Text style={texto.etiqueta}>{subtitulo}</Text>}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: espacio(3), paddingHorizontal: espacio(1) }}>
+          <Text style={[texto.etiqueta, { flex: 1 }]}>{titulo}</Text>
+          {subtitulo && <Text style={[texto.etiqueta, { flexShrink: 0 }]}>{subtitulo}</Text>}
         </View>
       )}
       <Tarjeta retraso={retraso} estilo={{ paddingVertical: espacio(1) }}>
         {materiales.map((m, j) => (
           <View key={m.id} style={j > 0 ? { borderTopWidth: 1, borderColor: colores.borde } : undefined}>
-            <FilaMaterial m={m} enGastos={enGastos(m)} onMarcar={() => onMarcar(m)} />
+            <FilaMaterial m={m} gasto={gastoDe(m)} tipos={tipos} onMarcar={() => onMarcar(m)} />
           </View>
         ))}
       </Tarjeta>
@@ -118,8 +134,11 @@ export default function PantallaEtapa() {
   const materiales = datos.materiales.filter((m) => m.etapa_id === etapa.id);
   const aComprar = materiales.filter((m) => !m.disponible);
   const disponibles = materiales.filter((m) => m.disponible);
-  const idsGastos = new Set(datos.gastos.map((g) => g.id));
-  const enGastos = (m: MaterialLista) => m.gasto_id !== null && idsGastos.has(m.gasto_id);
+  const tipos = datos.tipos_cambio;
+  const gastosPorId = new Map(datos.gastos.map((g) => [g.id, g]));
+  const gastoDe = (m: MaterialLista) => (m.gasto_id === null ? undefined : gastosPorId.get(m.gasto_id));
+  // Subtotal de un grupo en USD (los que no tienen tipo de cambio no suman).
+  const subtotalUSD = (ms: MaterialLista[]) => ms.reduce((s, m) => s + (totalMaterialUSD(m, tipos) ?? 0), 0);
 
   // Grupos en el orden en que aparecen; los materiales sin grupo van primero.
   const grupos = new Map<string | null, MaterialLista[]>();
@@ -135,7 +154,7 @@ export default function PantallaEtapa() {
       }),
       `${comprado ? 'Comprado' : 'Pendiente'}: ${m.nombre}`,
     ).catch((e: unknown) => avisar(e instanceof Error ? `No se guardó: ${e.message}` : 'No se guardó'));
-    if (comprado && !enGastos(m)) setPreguntando(m);
+    if (comprado && !gastoDe(m)) setPreguntando(m);
   }
 
   const fraccionComprada = resumen.subtotal === 0 ? 0 : resumen.compradoUSD / resumen.subtotal;
@@ -165,6 +184,11 @@ export default function PantallaEtapa() {
           <Text style={{ color: '#A8A8A8', fontSize: 13 }}>
             {resumen.comprados} de {resumen.aComprar} comprados · pendiente {formatoMoneda(resumen.pendienteUSD, 'USD')}
           </Text>
+          {resumen.incompleto && (
+            <Text style={{ color: colores.advertencia, fontSize: 13 }}>
+              * Hay precios en una moneda sin tipo de cambio cargado; no suman al total.
+            </Text>
+          )}
           {resumen.gastadoReal.ars > 0 && (
             <Text style={{ color: '#A8A8A8', fontSize: 13 }}>
               Gastado real: {formatoMoneda(resumen.gastadoReal.ars, 'ARS')}
@@ -192,16 +216,17 @@ export default function PantallaEtapa() {
           <Grupo
             key={grupo ?? '_'}
             titulo={grupo}
-            subtitulo={grupo ? formatoMoneda(delGrupo.reduce((s, m) => s + totalMaterial(m), 0), 'USD') : undefined}
+            subtitulo={grupo ? formatoMoneda(subtotalUSD(delGrupo), 'USD') : undefined}
             materiales={delGrupo}
             retraso={i * 60}
-            enGastos={enGastos}
+            gastoDe={gastoDe}
+            tipos={tipos}
             onMarcar={marcar}
           />
         ))}
 
         {disponibles.length > 0 && (
-          <Grupo titulo="Ya disponible (no suma)" materiales={disponibles} retraso={grupos.size * 60} enGastos={enGastos} onMarcar={marcar} />
+          <Grupo titulo="Ya disponible (no suma)" materiales={disponibles} retraso={grupos.size * 60} gastoDe={gastoDe} tipos={tipos} onMarcar={marcar} />
         )}
       </ScrollView>
       <BotonFlotante etiqueta="Agregar material" onPress={() => router.push({ pathname: '/material', params: { etapa: etapa.id } })} />

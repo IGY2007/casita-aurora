@@ -5,10 +5,10 @@ import { Text, View } from 'react-native';
 
 import { Acciones, Campo, Formulario, Opciones, Seccion } from '@/componentes/formulario';
 import { useGuardado } from '@/componentes/useGuardado';
-import { totalMaterial } from '@/datos/calculos';
+import { aUSD, totalMaterial } from '@/datos/calculos';
 import { useDatos } from '@/datos/DatosProvider';
-import { formatoMoneda, nuevoId, numeroATexto, parsearNumero, textoONull } from '@/datos/formato';
-import { UNIDADES_SUGERIDAS, type MaterialLista } from '@/datos/tipos';
+import { formatoMoneda, nuevoId, numeroATexto, parsearNumero, simboloMoneda, textoONull } from '@/datos/formato';
+import { MONEDAS, UNIDADES_SUGERIDAS, type MaterialLista, type Moneda } from '@/datos/tipos';
 import { colores, espacio, texto } from '@/tema';
 
 const TIPOS = ['A comprar', 'Ya disponible'] as const;
@@ -25,7 +25,9 @@ export default function FormularioMaterial() {
   const [grupo, setGrupo] = useState(existente?.grupo ?? '');
   const [cantidad, setCantidad] = useState(numeroATexto(existente?.cantidad ?? null));
   const [unidad, setUnidad] = useState(existente?.unidad ?? '');
-  const [precio, setPrecio] = useState(numeroATexto(existente?.precio_unitario_usd ?? null));
+  const [precio, setPrecio] = useState(numeroATexto(existente?.precio_unitario ?? null));
+  // Los materiales nuevos vienen en pesos (la mayoría se compra en ARS); los existentes conservan su moneda.
+  const [moneda, setMoneda] = useState<Moneda | null>(existente?.moneda ?? 'ARS');
   const [observaciones, setObservaciones] = useState(existente?.observaciones ?? '');
   const [tipo, setTipo] = useState<(typeof TIPOS)[number] | null>(existente?.disponible ? 'Ya disponible' : 'A comprar');
   const [estado, setEstado] = useState<(typeof ESTADOS)[number] | null>(existente?.comprado ? 'Comprado' : 'Pendiente');
@@ -36,19 +38,9 @@ export default function FormularioMaterial() {
   const unidades = [...new Set([...(datos?.materiales ?? []).map((m) => m.unidad).filter((u): u is string => !!u), ...UNIDADES_SUGERIDAS])];
   const nombreEtapa = (eid: string) => etapas.find((e) => e.id === eid)?.nombre ?? null;
 
-  const vistaPrevia: MaterialLista = {
-    id: '',
-    etapa_id: etapaId,
-    grupo: null,
-    nombre,
-    cantidad: parsearNumero(cantidad),
-    unidad: null,
-    precio_unitario_usd: parsearNumero(precio),
-    observaciones: null,
-    comprado: false,
-    disponible: false,
-    gasto_id: null,
-  };
+  // Vista previa del total estimado y su equivalente en dólares.
+  const totalEstimado = totalMaterial({ cantidad: parsearNumero(cantidad), precio_unitario: parsearNumero(precio) });
+  const totalEnUSD = moneda && moneda !== 'USD' ? aUSD(totalEstimado, moneda, datos?.tipos_cambio ?? []) : null;
 
   function guardar() {
     const cantidadNum = parsearNumero(cantidad);
@@ -57,6 +49,7 @@ export default function FormularioMaterial() {
     if (!etapas.some((e) => e.id === etapaId)) return setError('Elegí una etapa.');
     if (cantidad.trim() && cantidadNum === null) return setError('La cantidad no es un número válido.');
     if (precio.trim() && precioNum === null) return setError('El precio no es un número válido.');
+    if (!moneda) return setError('Elegí la moneda del precio.');
 
     const disponible = tipo === 'Ya disponible';
     const comprado = !disponible && estado === 'Comprado';
@@ -67,7 +60,8 @@ export default function FormularioMaterial() {
       nombre: nombre.trim(),
       cantidad: cantidadNum,
       unidad: textoONull(unidad),
-      precio_unitario_usd: precioNum,
+      precio_unitario: precioNum,
+      moneda,
       observaciones: textoONull(observaciones),
       comprado,
       disponible,
@@ -112,11 +106,26 @@ export default function FormularioMaterial() {
         <Campo etiqueta="Cantidad" valor={cantidad} onCambio={setCantidad} teclado="decimal-pad" placeholder="Opcional" />
         <Campo etiqueta="Unidad" valor={unidad} onCambio={setUnidad} placeholder="Opcional" />
         <Opciones opciones={unidades} valor={unidades.includes(unidad) ? unidad : null} onCambio={(u) => setUnidad(u ?? '')} opcional />
-        <Campo etiqueta="Precio unitario estimado" valor={precio} onCambio={setPrecio} teclado="decimal-pad" placeholder="Opcional" prefijo="US$" />
-        {parsearNumero(precio) !== null && (
+        <Campo
+          etiqueta="Precio unitario estimado"
+          valor={precio}
+          onCambio={setPrecio}
+          teclado="decimal-pad"
+          placeholder="Opcional"
+          prefijo={simboloMoneda(moneda)}
+        />
+        <Opciones etiqueta="Moneda del precio" opciones={MONEDAS} valor={moneda} onCambio={setMoneda} />
+        {parsearNumero(precio) !== null && moneda && (
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingTop: espacio(1) }}>
             <Text style={texto.secundario}>Total estimado</Text>
-            <Text style={texto.monto}>{formatoMoneda(totalMaterial(vistaPrevia), 'USD')}</Text>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={texto.monto}>{formatoMoneda(totalEstimado, moneda)}</Text>
+              {moneda !== 'USD' && (
+                <Text style={[texto.secundario, { fontSize: 13 }]}>
+                  {totalEnUSD !== null ? `≈ ${formatoMoneda(totalEnUSD, 'USD')}` : `Cargá el tipo de cambio de ${moneda} para pasarlo a dólares`}
+                </Text>
+              )}
+            </View>
           </View>
         )}
       </Seccion>

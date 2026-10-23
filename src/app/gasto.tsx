@@ -9,7 +9,7 @@ import { CampoFecha } from '@/componentes/CampoFecha';
 import { Acciones, Campo, Formulario, Opciones, Seccion } from '@/componentes/formulario';
 import { Tarjeta } from '@/componentes/Tarjeta';
 import { useGuardado } from '@/componentes/useGuardado';
-import { totalMaterial } from '@/datos/calculos';
+import { totalMaterial, totalMaterialUSD } from '@/datos/calculos';
 import { useDatos } from '@/datos/DatosProvider';
 import { esFechaValida, formatoMoneda, hoyISO, nuevoId, numeroATexto, parsearNumero, simboloMoneda, textoONull } from '@/datos/formato';
 import { CATEGORIA_OTROS, ESTADOS_GASTO, MONEDAS, UNIDADES_SUGERIDAS, type EstadoGasto, type Gasto, type Moneda } from '@/datos/tipos';
@@ -22,6 +22,7 @@ export default function FormularioGasto() {
   // Material de la lista desde el que se carga este gasto (solo al crear).
   const desdeLista = existente ? undefined : datos?.materiales.find((m) => m.id === params.material);
   const etapaDeLista = datos?.etapas.find((e) => e.id === desdeLista?.etapa_id);
+  const estimadoUSD = desdeLista && desdeLista.moneda !== 'USD' ? totalMaterialUSD(desdeLista, datos?.tipos_cambio ?? []) : null;
   // Categorías = etapas de la lista + "Otros"; si el gasto tiene una etapa que ya no existe, se conserva.
   const categorias = [...new Set([...(datos?.etapas ?? []).map((e) => e.nombre), CATEGORIA_OTROS, ...(existente ? [existente.categoria] : [])])];
 
@@ -96,9 +97,11 @@ export default function FormularioGasto() {
           <View style={{ flex: 1 }}>
             <Text style={[texto.cuerpo, { fontWeight: '600' }]}>Desde la lista de materiales</Text>
             <Text style={[texto.secundario, { fontSize: 13 }]}>
-              {desdeLista.precio_unitario_usd !== null
-                ? `Precio estimado: ${formatoMoneda(totalMaterial(desdeLista), 'USD')} (solo referencia). Escribí lo que pagaste realmente.`
-                : 'Escribí lo que pagaste realmente.'}
+              {desdeLista.precio_unitario !== null
+                ? `Precio estimado: ${formatoMoneda(totalMaterial(desdeLista), desdeLista.moneda)}${
+                    estimadoUSD !== null ? ` (≈ ${formatoMoneda(estimadoUSD, 'USD')})` : ''
+                  }, solo de referencia. Escribí lo que pagaste realmente, en la moneda que pagaste.`
+                : 'Escribí lo que pagaste realmente, en la moneda que pagaste.'}
             </Text>
           </View>
         </Tarjeta>

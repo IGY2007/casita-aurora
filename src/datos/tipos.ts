@@ -40,7 +40,8 @@ export interface Etapa {
   notas: string | null;
 }
 
-// Material de la lista por etapa. El total estimado es cantidad × precio unitario.
+// Material de la lista por etapa. El total estimado es cantidad × precio unitario, en su moneda;
+// los totales de etapas se convierten a USD con tipos_cambio.
 export interface MaterialLista {
   id: string;
   etapa_id: string;
@@ -48,7 +49,8 @@ export interface MaterialLista {
   nombre: string;
   cantidad: number | null;
   unidad: string | null;
-  precio_unitario_usd: number | null;
+  precio_unitario: number | null; // estimado, en `moneda`
+  moneda: Moneda;
   observaciones: string | null;
   comprado: boolean;
   // "Ya disponible": se muestra en la lista pero no suma a los totales
@@ -118,7 +120,7 @@ export interface TipoCambio {
 export const CATEGORIA_OTROS = 'Otros';
 
 export interface BaseDatos {
-  version: 2;
+  version: 3;
   etapas: Etapa[];
   materiales: MaterialLista[];
   imprevistos_porcentaje: number;

@@ -22,13 +22,13 @@ Etapas y materiales son 100% editables desde la app: **no hardcodear etapas, mat
 
 ## Código
 
-- `src/datos/tipos.ts`: estructura de `datos.json` (`BaseDatos` v2: etapas, materiales, imprevistos_porcentaje, gastos, horas_trabajo, transferencias, tipos_cambio, fichajes) y listas de valores permitidos (hoja "Config").
+- `src/datos/tipos.ts`: estructura de `datos.json` (`BaseDatos` v3: etapas, materiales, imprevistos_porcentaje, gastos, horas_trabajo, transferencias, tipos_cambio, fichajes) y listas de valores permitidos (hoja "Config").
 - `src/datos/migracion.ts`: `normalizarDatos` lleva cualquier versión (v1 o campos faltantes) al formato actual; se aplica al leer de GitHub y de la copia local. Si cambia el esquema, subir `version` y agregar la conversión acá.
 - `src/datos/github.ts`: leer y escribir `datos.json` (base64 UTF-8, `sha` para evitar pisar cambios).
 - `src/datos/almacenamientoLocal.ts`: configuración de GitHub y copia offline en `localStorage`.
 - `src/datos/DatosProvider.tsx`: contexto `useDatos()`. Para modificar datos, usar siempre `guardar(mutar, mensaje)`: aplica el cambio al instante (optimista), relee la última versión de GitHub, vuelve a aplicar `mutar` y hace el commit; si falla, revierte. Por eso `mutar` tiene que ser una función pura que funcione sobre cualquier versión.
 - `src/datos/formato.ts`: fechas, números en formato argentino (punto = miles, coma = decimales), `formatoMoneda` e IDs.
-- `src/datos/calculos.ts`: `calcularLista` (subtotales por etapa sin los "ya disponible", %, acumulado, imprevistos, comprado/pendiente), `calcularResumen` (presupuesto = total general de la lista) y conversión con `tipos_cambio`.
+- `src/datos/calculos.ts`: `calcularLista` (subtotales por etapa en USD sin los "ya disponible", %, acumulado, imprevistos, comprado/pendiente), `calcularResumen` (presupuesto = total general de la lista) y conversión con `tipos_cambio`.
 - `src/app/etapa.tsx` (detalle), `etapa-editar.tsx`, `material.tsx`, `imprevistos.tsx`: lista de materiales.
 - `src/app/gasto.tsx`, `hora.tsx`, `transferencia.tsx`, `tipos-cambio.tsx`: formularios modales (`?id=` para editar). Usan `src/componentes/formulario.tsx` (Formulario, Seccion, Campo, Opciones, Acciones), `CampoFecha.tsx` y `useGuardado.ts` (guarda, muestra el aviso y vuelve).
 - `src/componentes/Lista.tsx`: listas de las tabs agrupadas por mes, con botón flotante "+"; tocar una fila abre su formulario.
@@ -42,7 +42,7 @@ Etapas y materiales son 100% editables desde la app: **no hardcodear etapas, mat
 - Las pantallas de tabs no usan header: dibujan su propio `Encabezado` respetando `useSafeAreaInsets()`.
 - `src/app/+html.tsx` y `public/`: ícono y manifest para la pantalla de inicio del iPhone. `BASE` en `+html.tsx` debe coincidir con `baseUrl`.
 
-Monedas: ARS, USD, EUR, NOK. Fechas en texto ISO `AAAA-MM-DD`. El presupuesto está en USD. Los IDs son UUID (`crypto.randomUUID()`).
+Monedas: ARS, USD, EUR, NOK. Fechas en texto ISO `AAAA-MM-DD`. Cada material guarda su precio estimado con su propia `moneda` (los nuevos en ARS por defecto); los totales de etapas y el presupuesto se muestran en USD convirtiendo con `tipos_cambio` (`aUSD`, `totalMaterialUSD`). Si falta un tipo de cambio, ese material no suma y se avisa (`incompleto`). Los IDs son UUID (`crypto.randomUUID()`).
 
 ## Convenciones
 
