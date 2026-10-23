@@ -18,6 +18,8 @@ App personal (Expo + React Native + TypeScript) para controlar los gastos y el a
 4. **Transferencias** (`transferencias.tsx`): dinero enviado a Papá/Mamá: cuánto salió, cuánto llegó y para qué (hoja "Transferencias").
 5. **Etapas** (`etapas.tsx`): lista de materiales por etapa. Etapas ordenables (sin fechas), con subtotal, % del total, acumulado, imprevistos (% editable) y avance comprado vs. pendiente. Tocar una etapa abre `/etapa?id=...` con sus materiales agrupados y el casillero de comprado: al marcarlo pregunta si se añade a gastos y abre `/gasto?material=...` precargado (el monto pagado se escribe a mano, nunca cantidad × precio).
 
+**Gastos y etapas están conectados**: un material comprado y vinculado a un gasto (`gasto_id`) cuenta en la etapa lo pagado realmente (convertido a USD) en vez del estimado; los gastos de una etapa que no están vinculados a ningún material aparecen en "Otros gastos de esta etapa" y también suman. En el formulario de gasto, "Material de la lista" permite vincular/desvincular. El subtotal de etapa es "proyectado" (pagado + estimado de lo pendiente + otros gastos) y se compara con el estimado original de la lista.
+
 Etapas y materiales son 100% editables desde la app: **no hardcodear etapas, materiales ni precios**. Los gastos usan el nombre de la etapa como `categoria` (o "Otros"); al renombrar una etapa se actualizan sus gastos.
 
 ## Código
@@ -28,7 +30,7 @@ Etapas y materiales son 100% editables desde la app: **no hardcodear etapas, mat
 - `src/datos/almacenamientoLocal.ts`: configuración de GitHub y copia offline en `localStorage`.
 - `src/datos/DatosProvider.tsx`: contexto `useDatos()`. Para modificar datos, usar siempre `guardar(mutar, mensaje)`: aplica el cambio al instante (optimista), relee la última versión de GitHub, vuelve a aplicar `mutar` y hace el commit; si falla, revierte. Por eso `mutar` tiene que ser una función pura que funcione sobre cualquier versión.
 - `src/datos/formato.ts`: fechas, números en formato argentino (punto = miles, coma = decimales), `formatoMoneda` e IDs.
-- `src/datos/calculos.ts`: `calcularLista` (subtotales por etapa en USD sin los "ya disponible", %, acumulado, imprevistos, comprado/pendiente), `calcularResumen` (presupuesto = total general de la lista) y conversión con `tipos_cambio`.
+- `src/datos/calculos.ts`: `calcularLista` (por etapa: `ValorMaterial` con estimado/real, otros gastos, subtotal proyectado en USD sin los "ya disponible", estimado original, ahorro en lo comprado, %, acumulado, imprevistos, comprado/pendiente), `calcularResumen` (presupuesto = total general de la lista) y conversión con `tipos_cambio`.
 - `src/app/etapa.tsx` (detalle), `etapa-editar.tsx`, `material.tsx`, `imprevistos.tsx`: lista de materiales.
 - `src/app/gasto.tsx`, `hora.tsx`, `transferencia.tsx`, `tipos-cambio.tsx`: formularios modales (`?id=` para editar). Usan `src/componentes/formulario.tsx` (Formulario, Seccion, Campo, Opciones, Acciones), `CampoFecha.tsx` y `useGuardado.ts` (guarda, muestra el aviso y vuelve).
 - `src/componentes/Lista.tsx`: listas de las tabs agrupadas por mes, con botón flotante "+"; tocar una fila abre su formulario.

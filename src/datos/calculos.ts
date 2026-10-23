@@ -1,5 +1,5 @@
 // Cálculos del resumen y del presupuesto por etapa, con las mismas fórmulas que el Excel.
-import type { BaseDatos, Etapa, MaterialLista, Moneda, TipoCambio } from './tipos';
+import type { BaseDatos, Etapa, Gasto, MaterialLista, Moneda, TipoCambio } from './tipos';
 
 interface MontoConMoneda {
   monto: number;
@@ -71,37 +71,43 @@ export function totalMaterialUSD(m: MaterialLista, tipos: TipoCambio[]): number 
   return aUSD(totalMaterial(m), m.moneda, tipos);
 }
 
-// Suma en USD; los que no se pueden convertir no suman y marcan el total como incompleto.
-function sumarUSD(materiales: MaterialLista[], tipos: TipoCambio[]): { usd: number; incompleto: boolean } {
-  let usd = 0;
-  let incompleto = false;
-  for (const m of materiales) {
-    const v = totalMaterialUSD(m, tipos);
-    if (v === null) incompleto = true;
-    else usd += v;
-  }
-  return { usd, incompleto };
+// Valor de un material en la etapa: si ya se compró y está vinculado a un gasto, cuenta lo pagado
+// realmente (convertido a USD); si no, el precio estimado.
+export interface ValorMaterial {
+  material: MaterialLista;
+  gasto: Gasto | undefined; // gasto vinculado (existente)
+  estimadoUSD: number | null;
+  realUSD: number | null; // solo si hay gasto vinculado
+  valorUSD: number | null; // lo que suma a la etapa
 }
 
 export interface ResumenEtapa {
   etapa: Etapa;
   numero: number; // 1, 2, 3… según el orden
-  subtotal: number; // USD, sin los "ya disponible"
+  // USD proyectado: lo pagado en lo comprado + lo estimado en lo pendiente + otros gastos de la etapa
+  subtotal: number;
+  estimadoOriginal: number; // USD, solo precios estimados de la lista
+  // estimado − pagado en los materiales vinculados a gastos (positivo = ahorro)
+  diferenciaComprados: number;
   fraccionDelTotal: number; // sobre el subtotal general
   acumulado: number; // USD, suma de esta etapa y las anteriores
   compradoUSD: number;
   pendienteUSD: number;
   comprados: number;
   aComprar: number;
-  gastadoReal: Total; // gastos cargados con esta etapa como categoría, en ARS
+  materiales: ValorMaterial[]; // los "a comprar" (sin los ya disponibles)
+  otrosGastos: Gasto[]; // gastos de esta etapa que no están vinculados a ningún material
+  otrosGastosUSD: number;
+  gastadoReal: Total; // todos los gastos cargados con esta etapa como categoría, en ARS
   gastadoRealUSD: number | null;
-  // true si algún material está en una moneda sin tipo de cambio cargado (no suma)
+  // true si algún monto está en una moneda sin tipo de cambio cargado (no suma)
   incompleto: boolean;
 }
 
 export interface ResumenLista {
   etapas: ResumenEtapa[];
   subtotalGeneral: number;
+  estimadoOriginal: number;
   imprevistos: number;
   totalGeneral: number;
   incompleto: boolean;
@@ -109,23 +115,56 @@ export interface ResumenLista {
 
 export function calcularLista(datos: BaseDatos): ResumenLista {
   const tipos = datos.tipos_cambio;
+  const gastosPorId = new Map(datos.gastos.map((g) => [g.id, g]));
+  // Gastos que ya representan a un material de la lista (no se cuentan dos veces).
+  const vinculados = new Set(datos.materiales.map((m) => m.gasto_id).filter((id): id is string => id !== null && gastosPorId.has(id)));
+
   const parciales = datos.etapas.map((etapa) => {
-    const aComprar = datos.materiales.filter((m) => m.etapa_id === etapa.id && !m.disponible);
-    const comprados = aComprar.filter((m) => m.comprado);
+    let incompleto = false;
+    const valores: ValorMaterial[] = datos.materiales
+      .filter((m) => m.etapa_id === etapa.id && !m.disponible)
+      .map((m) => {
+        const gasto = m.gasto_id === null ? undefined : gastosPorId.get(m.gasto_id);
+        const estimadoUSD = totalMaterialUSD(m, tipos);
+        const realUSD = gasto ? aUSD(gasto.monto, gasto.moneda, tipos) : null;
+        // Sin tipo de cambio para lo pagado, se usa el estimado (y se avisa).
+        const valorUSD = gasto && realUSD !== null ? realUSD : estimadoUSD;
+        if (valorUSD === null || (gasto && realUSD === null)) incompleto = true;
+        return { material: m, gasto, estimadoUSD, realUSD, valorUSD };
+      });
+
+    const otrosGastos = datos.gastos.filter((g) => g.categoria === etapa.nombre && !vinculados.has(g.id));
+    let otrosGastosUSD = 0;
+    for (const g of otrosGastos) {
+      const usd = aUSD(g.monto, g.moneda, tipos);
+      if (usd === null) incompleto = true;
+      else otrosGastosUSD += usd;
+    }
+
+    const suma = (vs: ValorMaterial[], campo: 'valorUSD' | 'estimadoUSD') => vs.reduce((s, v) => s + (v[campo] ?? 0), 0);
+    const comprados = valores.filter((v) => v.material.comprado);
+    const pendientes = valores.filter((v) => !v.material.comprado);
+    const conGasto = valores.filter((v) => v.gasto && v.realUSD !== null);
     const gastadoReal = sumarARS(
       datos.gastos.filter((g) => g.categoria === etapa.nombre),
       tipos,
     );
-    const subtotal = sumarUSD(aComprar, tipos);
+
     return {
       etapa,
-      subtotal: subtotal.usd,
-      incompleto: subtotal.incompleto,
-      compradoUSD: sumarUSD(comprados, tipos).usd,
+      subtotal: suma(valores, 'valorUSD') + otrosGastosUSD,
+      estimadoOriginal: suma(valores, 'estimadoUSD'),
+      diferenciaComprados: conGasto.reduce((s, v) => s + ((v.estimadoUSD ?? 0) - (v.realUSD ?? 0)), 0),
+      compradoUSD: suma(comprados, 'valorUSD') + otrosGastosUSD,
+      pendienteUSD: suma(pendientes, 'valorUSD'),
       comprados: comprados.length,
-      aComprar: aComprar.length,
+      aComprar: valores.length,
+      materiales: valores,
+      otrosGastos,
+      otrosGastosUSD,
       gastadoReal,
       gastadoRealUSD: arsAUSD(gastadoReal.ars, tipos),
+      incompleto,
     };
   });
   const subtotalGeneral = parciales.reduce((s, e) => s + e.subtotal, 0);
@@ -139,13 +178,13 @@ export function calcularLista(datos: BaseDatos): ResumenLista {
       numero: i + 1,
       fraccionDelTotal: subtotalGeneral === 0 ? 0 : e.subtotal / subtotalGeneral,
       acumulado,
-      pendienteUSD: e.subtotal - e.compradoUSD,
     };
   });
 
   return {
     etapas,
     subtotalGeneral,
+    estimadoOriginal: etapas.reduce((s, e) => s + e.estimadoOriginal, 0),
     imprevistos,
     totalGeneral: subtotalGeneral + imprevistos,
     incompleto: etapas.some((e) => e.incompleto),

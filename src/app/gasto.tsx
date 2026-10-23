@@ -39,7 +39,25 @@ export default function FormularioGasto() {
   const [proveedor, setProveedor] = useState(existente?.proveedor ?? '');
   const [estado, setEstado] = useState<EstadoGasto | null>(existente?.estado ?? (desdeLista ? 'Comprado' : null));
   const [notas, setNotas] = useState(existente?.notas ?? desdeLista?.observaciones ?? '');
+  // Material de la lista al que corresponde este gasto: en la etapa cuenta lo pagado en vez del estimado.
+  const vinculadoAntes = existente ? datos?.materiales.find((m) => m.gasto_id === existente.id) : undefined;
+  const [materialId, setMaterialId] = useState<string | null>(vinculadoAntes?.id ?? desdeLista?.id ?? null);
   const { guardando, error, setError, ejecutar } = useGuardado('/gastos');
+
+  // Materiales de la etapa elegida que se pueden vincular: los "a comprar" sin otro gasto ya vinculado.
+  const idsGastos = new Set((datos?.gastos ?? []).map((g) => g.id));
+  const etapaElegida = datos?.etapas.find((e) => e.nombre === categoria);
+  const vinculables = (datos?.materiales ?? []).filter(
+    (m) =>
+      m.etapa_id === etapaElegida?.id &&
+      !m.disponible &&
+      (m.gasto_id === null || !idsGastos.has(m.gasto_id) || m.gasto_id === existente?.id),
+  );
+  // Si se cambia de etapa, el material elegido de otra etapa deja de valer.
+  const materialVinculado = vinculables.find((m) => m.id === materialId) ?? null;
+  // Etiqueta única por material (puede haber nombres repetidos en distintos grupos).
+  const etiquetaMaterial = (m: (typeof vinculables)[number]) =>
+    vinculables.filter((x) => x.nombre === m.nombre).length > 1 && m.grupo ? `${m.nombre} (${m.grupo})` : m.nombre;
 
   function guardar() {
     const montoNum = parsearNumero(monto);
@@ -69,10 +87,13 @@ export default function FormularioGasto() {
       (d) => ({
         ...d,
         gastos: existente ? d.gastos.map((g) => (g.id === gasto.id ? gasto : g)) : [...d.gastos, gasto],
-        // Desde la lista: el material queda comprado y vinculado, para no volver a preguntar.
-        materiales: desdeLista
-          ? d.materiales.map((m) => (m.id === desdeLista.id ? { ...m, comprado: true, gasto_id: gasto.id } : m))
-          : d.materiales,
+        // El material elegido queda comprado y vinculado (no se vuelve a preguntar); si antes estaba
+        // vinculado otro material a este gasto, vuelve a pendiente.
+        materiales: d.materiales.map((m) => {
+          if (m.id === materialVinculado?.id) return { ...m, comprado: true, gasto_id: gasto.id };
+          if (m.gasto_id === gasto.id) return { ...m, comprado: false, gasto_id: null };
+          return m;
+        }),
       }),
       `${existente ? 'Editar' : 'Nuevo'} gasto: ${gasto.material}`,
       existente ? 'Gasto actualizado' : 'Gasto guardado',
@@ -82,7 +103,12 @@ export default function FormularioGasto() {
   function eliminar() {
     if (!existente) return;
     void ejecutar(
-      (d) => ({ ...d, gastos: d.gastos.filter((g) => g.id !== existente.id) }),
+      (d) => ({
+        ...d,
+        gastos: d.gastos.filter((g) => g.id !== existente.id),
+        // El material sigue comprado, pero vuelve a contar su precio estimado.
+        materiales: d.materiales.map((m) => (m.gasto_id === existente.id ? { ...m, gasto_id: null } : m)),
+      }),
       `Eliminar gasto: ${existente.material}`,
       'Gasto eliminado',
     );
@@ -109,6 +135,22 @@ export default function FormularioGasto() {
       <Seccion titulo="¿Qué compraste?">
         <Campo etiqueta="Material" valor={material} onCambio={setMaterial} placeholder="Ej: Hormigón H21" />
         <Opciones etiqueta="Categoría" opciones={categorias} valor={categoria} onCambio={setCategoria} />
+        {vinculables.length > 0 && (
+          <View style={{ gap: espacio(2) }}>
+            <Opciones
+              etiqueta="Material de la lista"
+              opciones={vinculables.map(etiquetaMaterial)}
+              valor={materialVinculado ? etiquetaMaterial(materialVinculado) : null}
+              onCambio={(e) => setMaterialId(vinculables.find((m) => etiquetaMaterial(m) === e)?.id ?? null)}
+              opcional
+            />
+            <Text style={[texto.secundario, { fontSize: 12 }]}>
+              {materialVinculado
+                ? `En la etapa, ${materialVinculado.nombre} va a contar lo que pagaste en lugar del precio estimado.`
+                : 'Opcional: si corresponde a un material de la lista, elegilo. Si no, el gasto igual suma en la etapa como "otro gasto".'}
+            </Text>
+          </View>
+        )}
         <CampoFecha etiqueta="Fecha" valor={fecha} onCambio={setFecha} />
       </Seccion>
       <Seccion titulo="Pago" retraso={60}>

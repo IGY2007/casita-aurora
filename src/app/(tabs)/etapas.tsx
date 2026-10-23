@@ -131,7 +131,7 @@ export default function PantallaEtapas() {
 
         {!ordenando && (
           <View style={{ backgroundColor: colores.texto, borderRadius: radios.tarjeta, padding: espacio(5), gap: espacio(3), marginBottom: espacio(1) }}>
-            <Text style={[texto.etiqueta, { color: '#A8A8A8' }]}>Presupuesto estimado</Text>
+            <Text style={[texto.etiqueta, { color: '#A8A8A8' }]}>Presupuesto (pagado + estimado)</Text>
             <Fila etiqueta="Subtotal general" valor={formatoMoneda(lista.subtotalGeneral, 'USD')} />
             <Fila
               etiqueta={`Imprevistos (${numeroATexto(datos.imprevistos_porcentaje)}%)`}
@@ -141,6 +141,13 @@ export default function PantallaEtapas() {
             <View style={{ height: 1, backgroundColor: '#2A2A2A' }} />
             <Fila etiqueta="Total general" valor={formatoMoneda(lista.totalGeneral, 'USD')} fuerte />
             {eur !== null && <Text style={{ color: '#8A8A8A', fontSize: 13, textAlign: 'right' }}>≈ {formatoMoneda(eur, 'EUR')}</Text>}
+            {Math.abs(lista.subtotalGeneral - lista.estimadoOriginal) >= 0.5 && (
+              <Text style={{ color: lista.subtotalGeneral <= lista.estimadoOriginal ? colores.acento : colores.peligro, fontSize: 13 }}>
+                {lista.subtotalGeneral <= lista.estimadoOriginal ? 'Vas ahorrando' : 'Vas pasado por'}{' '}
+                {formatoMoneda(Math.abs(lista.estimadoOriginal - lista.subtotalGeneral), 'USD')} respecto de lo estimado (
+                {formatoMoneda(lista.estimadoOriginal, 'USD')})
+              </Text>
+            )}
             <BarraProgreso fraccion={lista.subtotalGeneral === 0 ? 0 : compradoTotal / lista.subtotalGeneral} />
             <Text style={{ color: '#A8A8A8', fontSize: 13 }}>
               Comprado {formatoMoneda(compradoTotal, 'USD')} · pendiente {formatoMoneda(lista.subtotalGeneral - compradoTotal, 'USD')}
