@@ -1,5 +1,6 @@
 // Guarda en el navegador la configuración de GitHub y la última copia de los datos (para ver sin internet).
 import type { ConfigGitHub } from './github';
+import { normalizarDatos } from './migracion';
 import type { BaseDatos } from './tipos';
 
 const CLAVE_CONFIG = 'casita-aurora:config';
@@ -27,5 +28,8 @@ function escribir(clave: string, valor: unknown): void {
 export const leerConfig = () => leer<ConfigGitHub>(CLAVE_CONFIG);
 export const guardarConfig = (config: ConfigGitHub | null) => escribir(CLAVE_CONFIG, config);
 
-export const leerCopiaDatos = () => leer<BaseDatos>(CLAVE_DATOS);
+export const leerCopiaDatos = (): BaseDatos | null => {
+  const copia = leer<unknown>(CLAVE_DATOS);
+  return copia === null ? null : normalizarDatos(copia);
+};
 export const guardarCopiaDatos = (datos: BaseDatos | null) => escribir(CLAVE_DATOS, datos);

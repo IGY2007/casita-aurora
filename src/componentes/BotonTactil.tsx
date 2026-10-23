@@ -25,14 +25,16 @@ interface PropsTactil {
   onPress: () => void;
   children: ReactNode;
   estilo?: StyleProp<ViewStyle>;
+  // Estilo del Pressable exterior (ej. maxWidth para que un chip no se salga de la tarjeta)
+  estiloContenedor?: StyleProp<ViewStyle>;
   deshabilitado?: boolean;
 }
 
 // Envoltorio genérico con la animación de escala.
-export function Tactil({ onPress, children, estilo, deshabilitado }: PropsTactil) {
+export function Tactil({ onPress, children, estilo, estiloContenedor, deshabilitado }: PropsTactil) {
   const { escala, alPresionar, alSoltar } = useEscalaTactil();
   return (
-    <Pressable onPress={onPress} onPressIn={alPresionar} onPressOut={alSoltar} disabled={deshabilitado}>
+    <Pressable onPress={onPress} onPressIn={alPresionar} onPressOut={alSoltar} disabled={deshabilitado} style={estiloContenedor}>
       <Animated.View style={[estilo, { transform: [{ scale: escala }], opacity: deshabilitado ? 0.5 : 1 }]}>{children}</Animated.View>
     </Pressable>
   );

@@ -1,7 +1,7 @@
 // Utilidades para formularios: fechas, números en formato argentino e IDs.
 
-export function hoyISO(): string {
-  const d = new Date();
+// Fecha local AAAA-MM-DD (por defecto, hoy).
+export function hoyISO(d: Date = new Date()): string {
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
   return `${d.getFullYear()}-${mm}-${dd}`;
@@ -58,6 +58,20 @@ export function mesYAnio(iso: string): string {
   const [anio, mes] = iso.split('-');
   const nombre = MESES[Number(mes) - 1] ?? '';
   return `${nombre.charAt(0).toUpperCase()}${nombre.slice(1)} ${anio}`;
+}
+
+// "2026-10-23T11:02:00.000Z" → "08:02" en hora local.
+export function horaCorta(isoFechaHora: string): string {
+  const d = new Date(isoFechaHora);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+// Milisegundos → "7 h 05 min" (o "45 min").
+export function duracion(ms: number): string {
+  const minutos = Math.max(0, Math.floor(ms / 60000));
+  const h = Math.floor(minutos / 60);
+  const m = minutos % 60;
+  return h > 0 ? `${h} h ${String(m).padStart(2, '0')} min` : `${m} min`;
 }
 
 export function nuevoId(): string {

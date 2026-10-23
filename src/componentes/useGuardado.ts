@@ -14,14 +14,16 @@ export function useGuardado(rutaLista: Href) {
   const [error, setError] = useState<string | null>(null);
 
   // mensaje: texto del commit en GitHub; aviso: lo que ve el usuario al terminar.
-  async function ejecutar(mutar: (datos: BaseDatos) => BaseDatos, mensaje: string, aviso: string) {
+  // destino: a dónde ir si la pantalla anterior deja de existir (ej. al borrar una etapa).
+  async function ejecutar(mutar: (datos: BaseDatos) => BaseDatos, mensaje: string, aviso: string, destino?: Href) {
     setGuardando(true);
     setError(null);
     try {
       await guardar(mutar, mensaje);
       avisar(aviso);
+      if (destino) router.dismissTo(destino);
       // Si se abrió el formulario directo (sin historial), se va a la lista.
-      if (router.canGoBack()) router.back();
+      else if (router.canGoBack()) router.back();
       else router.replace(rutaLista);
     } catch (e) {
       setError(e instanceof TypeError ? 'Sin conexión a internet. No se guardó.' : e instanceof Error ? e.message : String(e));

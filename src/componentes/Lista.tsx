@@ -1,6 +1,7 @@
 // Lista de registros agrupados por mes, con total mensual y botón "+" flotante para agregar.
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
+import type { ReactNode } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -32,9 +33,11 @@ interface PropsLista {
   items: ItemLista[];
   textoVacio: string;
   iconoVacio: NombreIcono;
+  // Contenido extra arriba de la lista (ej. el fichaje en Horas)
+  cabecera?: ReactNode;
 }
 
-export function Lista({ titulo, formulario, items, textoVacio, iconoVacio }: PropsLista) {
+export function Lista({ titulo, formulario, items, textoVacio, iconoVacio, cabecera }: PropsLista) {
   const { datos } = useDatos();
   const margenes = useSafeAreaInsets();
   const tipos = datos?.tipos_cambio ?? [];
@@ -55,6 +58,8 @@ export function Lista({ titulo, formulario, items, textoVacio, iconoVacio }: Pro
           titulo={titulo}
           subtitulo={items.length ? `${items.length} ${items.length === 1 ? 'registro' : 'registros'} · ${formatoMoneda(totalGeneral.ars, 'ARS')}${totalGeneral.incompleto ? ' *' : ''}` : undefined}
         />
+
+        {cabecera}
 
         {items.length === 0 && (
           <Tarjeta estilo={{ alignItems: 'center', paddingVertical: espacio(10), gap: espacio(3) }}>

@@ -1,5 +1,6 @@
 // Horas: jornadas de trabajo, propias y changas, agrupadas por mes.
 import { Lista } from '@/componentes/Lista';
+import { TarjetaFichaje } from '@/componentes/TarjetaFichaje';
 import { useDatos } from '@/datos/DatosProvider';
 import { numeroATexto } from '@/datos/formato';
 
@@ -16,5 +17,5 @@ export default function PantallaHoras() {
     detalleMonto: h.tipo === 'Propio (sin costo)' ? 'Propio' : 'Changa',
   }));
 
-  return <Lista titulo="Horas" formulario="/hora" items={items} textoVacio="Todavía no hay horas cargadas." iconoVacio="time-outline" />;
+  return <Lista titulo="Horas" formulario="/hora" items={items} textoVacio="Todavía no hay horas cargadas." iconoVacio="time-outline" cabecera={<TarjetaFichaje />} />;
 }

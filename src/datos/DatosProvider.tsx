@@ -1,5 +1,5 @@
 // Contexto con los datos de la obra: los lee de GitHub, guarda cambios y mantiene una copia local.
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { guardarConfig, guardarCopiaDatos, leerConfig, leerCopiaDatos } from './almacenamientoLocal';
 import { ErrorGitHub, escribirDatos, leerDatos, type ConfigGitHub } from './github';
@@ -32,6 +32,9 @@ export function DatosProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<ConfigGitHub | null>(null);
   const [estado, setEstado] = useState<Estado>('iniciando');
   const [datos, setDatos] = useState<BaseDatos | null>(null);
+  // Última versión de los datos, para los cambios optimistas sin recrear `guardar` en cada render.
+  const datosRef = useRef<BaseDatos | null>(null);
+  datosRef.current = datos;
   const [error, setError] = useState<string | null>(null);
   const [sinConexion, setSinConexion] = useState(false);
 
@@ -100,17 +103,25 @@ export function DatosProvider({ children }: { children: ReactNode }) {
   const guardar = useCallback(
     async (mutar: (datos: BaseDatos) => BaseDatos, mensaje: string) => {
       if (!config) throw new Error('Falta configurar GitHub.');
-      // Un reintento si otro dispositivo guardó en el medio (409).
-      for (let intento = 0; ; intento++) {
-        const actual = await leerDatos(config);
-        const nuevos = mutar(actual.datos);
-        try {
-          await escribirDatos(config, nuevos, actual.sha, mensaje);
-          aplicarDatos(nuevos);
-          return;
-        } catch (e) {
-          if (!(e instanceof ErrorGitHub && e.estado === 409) || intento >= 1) throw e;
+      // Optimista: el cambio se ve al instante (ej. tildar un material) y se revierte si falla.
+      const previos = datosRef.current;
+      if (previos) setDatos(mutar(previos));
+      try {
+        // Un reintento si otro dispositivo guardó en el medio (409).
+        for (let intento = 0; ; intento++) {
+          const actual = await leerDatos(config);
+          const nuevos = mutar(actual.datos);
+          try {
+            await escribirDatos(config, nuevos, actual.sha, mensaje);
+            aplicarDatos(nuevos);
+            return;
+          } catch (e) {
+            if (!(e instanceof ErrorGitHub && e.estado === 409) || intento >= 1) throw e;
+          }
         }
+      } catch (e) {
+        setDatos(previos);
+        throw e;
       }
     },
     [config, aplicarDatos],

@@ -1,22 +1,23 @@
-// Ícono de cada categoría de la hoja "Config", para listas y etapas.
+// Ícono de cada etapa según palabras de su nombre: como las etapas se pueden renombrar,
+// no se asocia por nombre exacto.
 import type { NombreIcono } from './FilaRegistro';
 
-const ICONOS_CATEGORIA: Record<string, NombreIcono> = {
-  'Platea / Cimientos': 'layers-outline',
-  'Madera a comprar': 'hammer-outline',
-  'Cerramientos (puertas/ventanas)': 'browsers-outline',
-  'Instalación eléctrica': 'flash-outline',
-  'Instalación sanitaria': 'water-outline',
-  'Calefacción (caldera/radiadores)': 'flame-outline',
-  'Cocina (artefactos)': 'restaurant-outline',
-  Electrodomésticos: 'tv-outline',
-  'Dormitorio (mobiliario)': 'bed-outline',
-  'Living (mobiliario)': 'cafe-outline',
-  'Terminaciones (pintura/pisos)': 'color-palette-outline',
-  'Exterior / techo': 'umbrella-outline',
-  'Imprevistos (10%)': 'alert-circle-outline',
-};
+const REGLAS: [RegExp, NombreIcono][] = [
+  [/platea|cimiento|fundaci/i, 'layers-outline'],
+  [/estructura|techo|madera/i, 'home-outline'],
+  [/cerramiento|puerta|ventana|abertura/i, 'browsers-outline'],
+  [/el[eé]ctric/i, 'flash-outline'],
+  [/instalaci|sanitari|agua/i, 'water-outline'],
+  [/calefacci|caldera|radiador/i, 'flame-outline'],
+  [/revestimiento|fen[oó]lico|enduido/i, 'grid-outline'],
+  [/revoque|barro/i, 'brush-outline'],
+  [/piso|pintura|terminaci/i, 'color-palette-outline'],
+  [/baño|cocina/i, 'restaurant-outline'],
+  [/electrodom/i, 'tv-outline'],
+  [/mobiliario|dormitorio|living|mueble/i, 'bed-outline'],
+  [/imprevisto/i, 'alert-circle-outline'],
+];
 
 export function iconoCategoria(nombre: string): NombreIcono {
-  return ICONOS_CATEGORIA[nombre] ?? 'cube-outline';
+  return REGLAS.find(([patron]) => patron.test(nombre))?.[1] ?? 'cube-outline';
 }

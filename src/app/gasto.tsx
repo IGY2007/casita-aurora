@@ -1,31 +1,43 @@
-// Formulario de gasto: nuevo (sin id) o edición (/gasto?id=...).
+// Formulario de gasto: nuevo (sin id), edición (/gasto?id=...) o desde la lista de materiales
+// (/gasto?material=...), con los datos del material precargados y el gasto vinculado a él.
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
+import { Text, View } from 'react-native';
 
 import { CampoFecha } from '@/componentes/CampoFecha';
 import { Acciones, Campo, Formulario, Opciones, Seccion } from '@/componentes/formulario';
+import { Tarjeta } from '@/componentes/Tarjeta';
 import { useGuardado } from '@/componentes/useGuardado';
+import { totalMaterial } from '@/datos/calculos';
 import { useDatos } from '@/datos/DatosProvider';
-import { esFechaValida, hoyISO, nuevoId, numeroATexto, parsearNumero, simboloMoneda, textoONull } from '@/datos/formato';
-import { ESTADOS_GASTO, MONEDAS, UNIDADES_SUGERIDAS, type EstadoGasto, type Gasto, type Moneda } from '@/datos/tipos';
+import { esFechaValida, formatoMoneda, hoyISO, nuevoId, numeroATexto, parsearNumero, simboloMoneda, textoONull } from '@/datos/formato';
+import { CATEGORIA_OTROS, ESTADOS_GASTO, MONEDAS, UNIDADES_SUGERIDAS, type EstadoGasto, type Gasto, type Moneda } from '@/datos/tipos';
+import { colores, espacio, texto } from '@/tema';
 
 export default function FormularioGasto() {
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const params = useLocalSearchParams<{ id?: string; material?: string }>();
   const { datos } = useDatos();
-  const existente = datos?.gastos.find((g) => g.id === id);
-  const categorias = (datos?.presupuesto_categorias ?? []).filter((c) => !c.es_imprevistos).map((c) => c.nombre);
+  const existente = datos?.gastos.find((g) => g.id === params.id);
+  // Material de la lista desde el que se carga este gasto (solo al crear).
+  const desdeLista = existente ? undefined : datos?.materiales.find((m) => m.id === params.material);
+  const etapaDeLista = datos?.etapas.find((e) => e.id === desdeLista?.etapa_id);
+  // Categorías = etapas de la lista + "Otros"; si el gasto tiene una etapa que ya no existe, se conserva.
+  const categorias = [...new Set([...(datos?.etapas ?? []).map((e) => e.nombre), CATEGORIA_OTROS, ...(existente ? [existente.categoria] : [])])];
 
   const [fecha, setFecha] = useState(existente?.fecha ?? hoyISO());
-  const [categoria, setCategoria] = useState<string | null>(existente?.categoria ?? null);
-  const [material, setMaterial] = useState(existente?.material ?? '');
-  const [descripcion, setDescripcion] = useState(existente?.descripcion ?? '');
-  const [cantidad, setCantidad] = useState(numeroATexto(existente?.cantidad ?? null));
-  const [unidad, setUnidad] = useState(existente?.unidad ?? '');
+  const [categoria, setCategoria] = useState<string | null>(existente?.categoria ?? etapaDeLista?.nombre ?? null);
+  const [material, setMaterial] = useState(existente?.material ?? desdeLista?.nombre ?? '');
+  const [descripcion, setDescripcion] = useState(existente?.descripcion ?? desdeLista?.grupo ?? '');
+  const [cantidad, setCantidad] = useState(numeroATexto(existente?.cantidad ?? desdeLista?.cantidad ?? null));
+  const [unidad, setUnidad] = useState(existente?.unidad ?? desdeLista?.unidad ?? '');
+  // El monto pagado se escribe a mano: nunca se calcula como cantidad × precio unitario.
   const [monto, setMonto] = useState(numeroATexto(existente?.monto ?? null));
+  const [precioUnitario, setPrecioUnitario] = useState(numeroATexto(existente?.precio_unitario ?? null));
   const [moneda, setMoneda] = useState<Moneda | null>(existente?.moneda ?? 'ARS');
   const [proveedor, setProveedor] = useState(existente?.proveedor ?? '');
-  const [estado, setEstado] = useState<EstadoGasto | null>(existente?.estado ?? null);
-  const [notas, setNotas] = useState(existente?.notas ?? '');
+  const [estado, setEstado] = useState<EstadoGasto | null>(existente?.estado ?? (desdeLista ? 'Comprado' : null));
+  const [notas, setNotas] = useState(existente?.notas ?? desdeLista?.observaciones ?? '');
   const { guardando, error, setError, ejecutar } = useGuardado('/gastos');
 
   function guardar() {
@@ -35,6 +47,7 @@ export default function FormularioGasto() {
     if (!material.trim()) return setError('Escribí qué material compraste.');
     if (montoNum === null) return setError('Escribí el monto pagado (por ejemplo 248.000).');
     if (!moneda) return setError('Elegí la moneda.');
+    if (precioUnitario.trim() && parsearNumero(precioUnitario) === null) return setError('El precio unitario no es un número válido.');
 
     const gasto: Gasto = {
       id: existente?.id ?? nuevoId(),
@@ -46,6 +59,7 @@ export default function FormularioGasto() {
       unidad: textoONull(unidad),
       monto: montoNum,
       moneda,
+      precio_unitario: parsearNumero(precioUnitario),
       proveedor: textoONull(proveedor),
       estado,
       notas: textoONull(notas),
@@ -54,6 +68,10 @@ export default function FormularioGasto() {
       (d) => ({
         ...d,
         gastos: existente ? d.gastos.map((g) => (g.id === gasto.id ? gasto : g)) : [...d.gastos, gasto],
+        // Desde la lista: el material queda comprado y vinculado, para no volver a preguntar.
+        materiales: desdeLista
+          ? d.materiales.map((m) => (m.id === desdeLista.id ? { ...m, comprado: true, gasto_id: gasto.id } : m))
+          : d.materiales,
       }),
       `${existente ? 'Editar' : 'Nuevo'} gasto: ${gasto.material}`,
       existente ? 'Gasto actualizado' : 'Gasto guardado',
@@ -72,6 +90,19 @@ export default function FormularioGasto() {
   return (
     <Formulario pie={<Acciones guardando={guardando} error={error} onGuardar={guardar} onEliminar={existente ? eliminar : undefined} />}>
       <Stack.Screen options={{ title: existente ? 'Editar gasto' : 'Nuevo gasto' }} />
+      {desdeLista && (
+        <Tarjeta estilo={{ flexDirection: 'row', gap: espacio(3), alignItems: 'center', backgroundColor: colores.acentoSuave }}>
+          <Ionicons name="list-outline" size={22} color={colores.acento} />
+          <View style={{ flex: 1 }}>
+            <Text style={[texto.cuerpo, { fontWeight: '600' }]}>Desde la lista de materiales</Text>
+            <Text style={[texto.secundario, { fontSize: 13 }]}>
+              {desdeLista.precio_unitario_usd !== null
+                ? `Precio estimado: ${formatoMoneda(totalMaterial(desdeLista), 'USD')} (solo referencia). Escribí lo que pagaste realmente.`
+                : 'Escribí lo que pagaste realmente.'}
+            </Text>
+          </View>
+        </Tarjeta>
+      )}
       <Seccion titulo="¿Qué compraste?">
         <Campo etiqueta="Material" valor={material} onCambio={setMaterial} placeholder="Ej: Hormigón H21" />
         <Opciones etiqueta="Categoría" opciones={categorias} valor={categoria} onCambio={setCategoria} />
@@ -80,6 +111,7 @@ export default function FormularioGasto() {
       <Seccion titulo="Pago" retraso={60}>
         <Campo etiqueta="Monto pagado" valor={monto} onCambio={setMonto} teclado="decimal-pad" placeholder="0" prefijo={simboloMoneda(moneda)} />
         <Opciones etiqueta="Moneda" opciones={MONEDAS} valor={moneda} onCambio={setMoneda} />
+        <Campo etiqueta="Precio unitario" valor={precioUnitario} onCambio={setPrecioUnitario} teclado="decimal-pad" placeholder="Opcional" prefijo={simboloMoneda(moneda)} />
         <Campo etiqueta="Proveedor" valor={proveedor} onCambio={setProveedor} placeholder="Opcional" />
         <Opciones etiqueta="Estado" opciones={ESTADOS_GASTO} valor={estado} onCambio={setEstado} opcional />
       </Seccion>

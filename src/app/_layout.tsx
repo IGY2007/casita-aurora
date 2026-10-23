@@ -1,42 +1,24 @@
 // Layout raíz: carga los datos desde GitHub y, si todavía no hay conexión configurada, pide los datos de acceso.
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack } from 'expo-router';
-import { useEffect, useRef } from 'react';
-import { Animated, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
+import { AnimacionInicio } from '@/componentes/AnimacionInicio';
 import { AvisoProvider } from '@/componentes/Aviso';
 import { BotonTactil } from '@/componentes/BotonTactil';
 import { PantallaConexion } from '@/componentes/PantallaConexion';
 import { DatosProvider, useDatos } from '@/datos/DatosProvider';
 import { colores, espacio, texto } from '@/tema';
 
-const logo = require('../../assets/icon.png');
-
-function PantallaCarga() {
-  const pulso = useRef(new Animated.Value(0.6)).current;
-  useEffect(() => {
-    const animacion = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulso, { toValue: 1, duration: 700, useNativeDriver: false }),
-        Animated.timing(pulso, { toValue: 0.6, duration: 700, useNativeDriver: false }),
-      ]),
-    );
-    animacion.start();
-    return () => animacion.stop();
-  }, [pulso]);
-
-  return (
-    <View style={{ flex: 1, backgroundColor: '#000000', alignItems: 'center', justifyContent: 'center' }}>
-      <Animated.Image source={logo} style={{ width: 140, height: 140, opacity: pulso, transform: [{ scale: pulso.interpolate({ inputRange: [0.6, 1], outputRange: [0.96, 1] }) }] }} />
-    </View>
-  );
+function cargandoSinDatos(estado: string, hayDatos: boolean) {
+  return estado === 'iniciando' || (estado === 'cargando' && !hayDatos);
 }
 
 function Contenido() {
   const { estado, datos, error, recargar, desconectar } = useDatos();
 
-  // Sin datos todavía: logo animado. Con datos, las recargas no tapan la app.
-  if (estado === 'iniciando' || (estado === 'cargando' && !datos)) return <PantallaCarga />;
+  // Mientras carga, la animación de inicio tapa la pantalla (fondo negro debajo para que no parpadee).
+  if (cargandoSinDatos(estado, datos !== null)) return <View style={{ flex: 1, backgroundColor: '#000000' }} />;
   if (estado === 'sin-config') return <PantallaConexion />;
   if (estado === 'error' || !datos) {
     return (
@@ -61,12 +43,21 @@ function Contenido() {
       }}
     >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="etapa" options={{ title: 'Etapa' }} />
       <Stack.Screen name="gasto" options={{ presentation: 'modal' }} />
       <Stack.Screen name="hora" options={{ presentation: 'modal' }} />
       <Stack.Screen name="transferencia" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="material" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="etapa-editar" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="imprevistos" options={{ presentation: 'modal', title: 'Imprevistos' }} />
       <Stack.Screen name="tipos-cambio" options={{ presentation: 'modal', title: 'Tipos de cambio' }} />
     </Stack>
   );
+}
+
+function Inicio() {
+  const { estado, datos } = useDatos();
+  return <AnimacionInicio listo={!cargandoSinDatos(estado, datos !== null)} />;
 }
 
 export default function LayoutRaiz() {
@@ -74,6 +65,7 @@ export default function LayoutRaiz() {
     <DatosProvider>
       <AvisoProvider>
         <Contenido />
+        <Inicio />
       </AvisoProvider>
     </DatosProvider>
   );

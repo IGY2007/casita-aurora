@@ -1,5 +1,5 @@
 // Cálculos del resumen y del presupuesto por etapa, con las mismas fórmulas que el Excel.
-import type { BaseDatos, Moneda, TipoCambio } from './tipos';
+import type { BaseDatos, Etapa, MaterialLista, Moneda, TipoCambio } from './tipos';
 
 interface MontoConMoneda {
   monto: number;
@@ -51,6 +51,79 @@ function montoTransferencia(t: BaseDatos['transferencias'][number]): MontoConMon
     : { monto: t.monto_enviado, moneda: t.moneda_enviada };
 }
 
+// --- Lista de materiales por etapa ---
+
+// Total estimado de un material: cantidad × precio unitario (sin cantidad cuenta como 1).
+export function totalMaterial(m: MaterialLista): number {
+  if (m.precio_unitario_usd === null) return 0;
+  return (m.cantidad ?? 1) * m.precio_unitario_usd;
+}
+
+export interface ResumenEtapa {
+  etapa: Etapa;
+  numero: number; // 1, 2, 3… según el orden
+  subtotal: number; // USD, sin los "ya disponible"
+  fraccionDelTotal: number; // sobre el subtotal general
+  acumulado: number; // USD, suma de esta etapa y las anteriores
+  compradoUSD: number;
+  pendienteUSD: number;
+  comprados: number;
+  aComprar: number;
+  gastadoReal: Total; // gastos cargados con esta etapa como categoría, en ARS
+  gastadoRealUSD: number | null;
+}
+
+export interface ResumenLista {
+  etapas: ResumenEtapa[];
+  subtotalGeneral: number;
+  imprevistos: number;
+  totalGeneral: number;
+}
+
+export function calcularLista(datos: BaseDatos): ResumenLista {
+  const tipos = datos.tipos_cambio;
+  const parciales = datos.etapas.map((etapa) => {
+    const aComprar = datos.materiales.filter((m) => m.etapa_id === etapa.id && !m.disponible);
+    const comprados = aComprar.filter((m) => m.comprado);
+    const gastadoReal = sumarARS(
+      datos.gastos.filter((g) => g.categoria === etapa.nombre),
+      tipos,
+    );
+    return {
+      etapa,
+      subtotal: aComprar.reduce((s, m) => s + totalMaterial(m), 0),
+      compradoUSD: comprados.reduce((s, m) => s + totalMaterial(m), 0),
+      comprados: comprados.length,
+      aComprar: aComprar.length,
+      gastadoReal,
+      gastadoRealUSD: arsAUSD(gastadoReal.ars, tipos),
+    };
+  });
+  const subtotalGeneral = parciales.reduce((s, e) => s + e.subtotal, 0);
+  const imprevistos = (subtotalGeneral * datos.imprevistos_porcentaje) / 100;
+
+  let acumulado = 0;
+  const etapas = parciales.map((e, i) => {
+    acumulado += e.subtotal;
+    return {
+      ...e,
+      numero: i + 1,
+      fraccionDelTotal: subtotalGeneral === 0 ? 0 : e.subtotal / subtotalGeneral,
+      acumulado,
+      pendienteUSD: e.subtotal - e.compradoUSD,
+    };
+  });
+
+  return { etapas, subtotalGeneral, imprevistos, totalGeneral: subtotalGeneral + imprevistos };
+}
+
+// USD → EUR pasando por los tipos de cambio a pesos; null si falta alguno.
+export function usdAEUR(usd: number, tipos: TipoCambio[]): number | null {
+  const ars = usdAARS(usd, tipos);
+  const tasaEUR = tasa(tipos, 'EUR');
+  return ars === null || tasaEUR === null ? null : ars / tasaEUR;
+}
+
 export interface Resumen {
   materiales: Total;
   changas: Total;
@@ -74,7 +147,7 @@ export function calcularResumen(datos: BaseDatos): Resumen {
   );
   const enviado = sumarARS(datos.transferencias.map(montoTransferencia), tipos);
   const gastoTotal = { ars: materiales.ars + changas.ars, incompleto: materiales.incompleto || changas.incompleto };
-  const presupuestoUSD = datos.presupuesto_categorias.reduce((s, c) => s + c.presupuesto_usd, 0);
+  const presupuestoUSD = calcularLista(datos).totalGeneral;
   const materialesUSD = arsAUSD(materiales.ars, tipos);
 
   return {
@@ -89,33 +162,4 @@ export function calcularResumen(datos: BaseDatos): Resumen {
     materialesUSD,
     fraccionEjecutada: materialesUSD === null || presupuestoUSD === 0 ? null : materialesUSD / presupuestoUSD,
   };
-}
-
-export interface Etapa {
-  nombre: string;
-  esImprevistos: boolean;
-  presupuestoUSD: number;
-  gastado: Total;
-  gastadoUSD: number | null;
-  fraccion: number | null;
-}
-
-// Hoja "Presupuesto por etapa": el gasto real por categoría sale solo de materiales.
-export function calcularEtapas(datos: BaseDatos): Etapa[] {
-  const tipos = datos.tipos_cambio;
-  return datos.presupuesto_categorias.map((c) => {
-    const gastado = sumarARS(
-      datos.gastos.filter((g) => g.categoria === c.nombre),
-      tipos,
-    );
-    const gastadoUSD = arsAUSD(gastado.ars, tipos);
-    return {
-      nombre: c.nombre,
-      esImprevistos: c.es_imprevistos,
-      presupuestoUSD: c.presupuesto_usd,
-      gastado,
-      gastadoUSD,
-      fraccion: gastadoUSD === null || c.presupuesto_usd === 0 ? null : gastadoUSD / c.presupuesto_usd,
-    };
-  });
 }

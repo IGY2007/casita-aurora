@@ -1,4 +1,5 @@
 // Lectura y escritura de datos.json en el repositorio privado, usando la API de contenidos de GitHub.
+import { normalizarDatos } from './migracion';
 import type { BaseDatos } from './tipos';
 
 const ARCHIVO = 'datos.json';
@@ -67,7 +68,7 @@ export async function leerDatos(config: ConfigGitHub): Promise<ArchivoDatos> {
   const respuesta = await fetch(url(config), { headers: encabezados(config), cache: 'no-store' });
   if (!respuesta.ok) throw await errorDeRespuesta(respuesta);
   const cuerpo = (await respuesta.json()) as { content: string; sha: string };
-  return { datos: JSON.parse(desdeBase64(cuerpo.content)) as BaseDatos, sha: cuerpo.sha };
+  return { datos: normalizarDatos(JSON.parse(desdeBase64(cuerpo.content))), sha: cuerpo.sha };
 }
 
 export async function escribirDatos(

@@ -1,4 +1,5 @@
-// Formulario de jornada de trabajo: nueva (sin id) o edición (/hora?id=...).
+// Formulario de jornada de trabajo: nueva (sin id), edición (/hora?id=...) o desde un fichaje
+// (/hora?fichaje=...), con persona, fecha y horas calculadas; al guardar, el fichaje se cierra.
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 
@@ -6,23 +7,30 @@ import { CampoFecha } from '@/componentes/CampoFecha';
 import { Acciones, Campo, Formulario, Opciones, Seccion } from '@/componentes/formulario';
 import { useGuardado } from '@/componentes/useGuardado';
 import { useDatos } from '@/datos/DatosProvider';
-import { esFechaValida, hoyISO, nuevoId, numeroATexto, parsearNumero, simboloMoneda, textoONull } from '@/datos/formato';
+import { esFechaValida, horaCorta, hoyISO, nuevoId, numeroATexto, parsearNumero, simboloMoneda, textoONull } from '@/datos/formato';
 import { MONEDAS, PERSONAS, TIPOS_HORA, type HoraTrabajo, type Moneda, type Persona, type TipoHora } from '@/datos/tipos';
 
 export default function FormularioHora() {
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const params = useLocalSearchParams<{ id?: string; fichaje?: string }>();
   const { datos } = useDatos();
-  const existente = datos?.horas_trabajo.find((h) => h.id === id);
+  const existente = datos?.horas_trabajo.find((h) => h.id === params.id);
+  const fichaje = existente ? undefined : datos?.fichajes.find((f) => f.id === params.fichaje);
+  // Horas del fichaje redondeadas a 2 decimales (7,5 = 7 h 30 min).
+  const horasFichadas = fichaje
+    ? Math.round(((new Date(fichaje.fin ?? Date.now()).getTime() - new Date(fichaje.inicio).getTime()) / 3600000) * 100) / 100
+    : null;
 
-  const [fecha, setFecha] = useState(existente?.fecha ?? hoyISO());
-  const [persona, setPersona] = useState<Persona | null>(existente?.persona ?? null);
+  const [fecha, setFecha] = useState(existente?.fecha ?? (fichaje ? hoyISO(new Date(fichaje.inicio)) : hoyISO()));
+  const [persona, setPersona] = useState<Persona | null>(existente?.persona ?? fichaje?.persona ?? null);
   const [tarea, setTarea] = useState(existente?.tarea ?? '');
   const [tipo, setTipo] = useState<TipoHora | null>(existente?.tipo ?? 'Changa / contratado');
-  const [horas, setHoras] = useState(numeroATexto(existente?.horas ?? null));
+  const [horas, setHoras] = useState(numeroATexto(existente?.horas ?? horasFichadas));
   const [tarifa, setTarifa] = useState(numeroATexto(existente?.tarifa_hora ?? null));
   const [costo, setCosto] = useState(numeroATexto(existente?.costo ?? null));
   const [moneda, setMoneda] = useState<Moneda | null>(existente?.moneda ?? 'ARS');
-  const [observaciones, setObservaciones] = useState(existente?.observaciones ?? '');
+  const [observaciones, setObservaciones] = useState(
+    existente?.observaciones ?? (fichaje ? `Fichado ${horaCorta(fichaje.inicio)} – ${horaCorta(fichaje.fin ?? new Date().toISOString())}` : ''),
+  );
   const { guardando, error, setError, ejecutar } = useGuardado('/horas');
 
   const esPropio = tipo === 'Propio (sin costo)';
@@ -54,6 +62,8 @@ export default function FormularioHora() {
       (d) => ({
         ...d,
         horas_trabajo: existente ? d.horas_trabajo.map((h) => (h.id === hora.id ? hora : h)) : [...d.horas_trabajo, hora],
+        // Registrada la jornada, el fichaje ya no hace falta.
+        fichajes: fichaje ? d.fichajes.filter((f) => f.id !== fichaje.id) : d.fichajes,
       }),
       `${existente ? 'Editar' : 'Nueva'} jornada: ${hora.persona} ${hora.fecha}`,
       existente ? 'Jornada actualizada' : 'Jornada guardada',

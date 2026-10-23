@@ -33,23 +33,49 @@ export const UNIDADES_SUGERIDAS = [
   'kg', 'm', 'm²', 'm³', 'unidad', 'litro', 'bolsa', 'rollo', 'placa', 'caja', 'global', 'set',
 ] as const;
 
-export interface PresupuestoCategoria {
+// Etapa de obra de la lista de materiales. El orden del arreglo es el orden de las etapas (sin fechas).
+export interface Etapa {
+  id: string;
   nombre: string;
-  presupuesto_usd: number;
-  // true para "Imprevistos (10%)": suma al presupuesto pero no se usa en gastos
-  es_imprevistos: boolean;
+  notas: string | null;
+}
+
+// Material de la lista por etapa. El total estimado es cantidad × precio unitario.
+export interface MaterialLista {
+  id: string;
+  etapa_id: string;
+  grupo: string | null; // subgrupo dentro de la etapa, ej. "Cimientos", "Cañerías enterradas"
+  nombre: string;
+  cantidad: number | null;
+  unidad: string | null;
+  precio_unitario_usd: number | null;
+  observaciones: string | null;
+  comprado: boolean;
+  // "Ya disponible": se muestra en la lista pero no suma a los totales
+  disponible: boolean;
+  // Gasto creado al marcarlo como comprado, para no volver a preguntar
+  gasto_id: string | null;
+}
+
+// Jornada fichada (punch in / punch out) todavía no registrada en horas_trabajo.
+export interface Fichaje {
+  id: string;
+  persona: Persona;
+  inicio: string; // fecha y hora ISO
+  fin: string | null;
 }
 
 export interface Gasto {
   id: string;
   fecha: string; // ISO AAAA-MM-DD
-  categoria: string; // nombre de una PresupuestoCategoria
+  categoria: string; // nombre de una Etapa (u "Otros")
   material: string;
   descripcion: string | null;
   cantidad: number | null;
   unidad: string | null;
   monto: number;
   moneda: Moneda;
+  precio_unitario?: number | null; // opcional, en la misma moneda que el monto
   proveedor: string | null;
   estado: EstadoGasto | null;
   notas: string | null;
@@ -88,9 +114,25 @@ export interface TipoCambio {
   actualizado: string | null;
 }
 
+// Categoría para gastos que no corresponden a ninguna etapa.
+export const CATEGORIA_OTROS = 'Otros';
+
 export interface BaseDatos {
+  version: 2;
+  etapas: Etapa[];
+  materiales: MaterialLista[];
+  imprevistos_porcentaje: number;
+  gastos: Gasto[];
+  horas_trabajo: HoraTrabajo[];
+  transferencias: Transferencia[];
+  tipos_cambio: TipoCambio[];
+  fichajes: Fichaje[];
+}
+
+// Formato anterior (v1), solo para migrar copias viejas.
+export interface BaseDatosV1 {
   version: 1;
-  presupuesto_categorias: PresupuestoCategoria[];
+  presupuesto_categorias: { nombre: string; presupuesto_usd: number; es_imprevistos: boolean }[];
   gastos: Gasto[];
   horas_trabajo: HoraTrabajo[];
   transferencias: Transferencia[];

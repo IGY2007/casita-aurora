@@ -104,6 +104,7 @@ export function Opciones<T extends string>({ etiqueta, opciones, valor, onCambio
             <Tactil
               key={opcion}
               onPress={() => onCambio(elegida && opcional ? null : opcion)}
+              estiloContenedor={{ maxWidth: '100%' }}
               estilo={{
                 flexDirection: 'row',
                 alignItems: 'center',
@@ -117,7 +118,7 @@ export function Opciones<T extends string>({ etiqueta, opciones, valor, onCambio
               }}
             >
               {elegida && <Ionicons name="checkmark" size={14} color="#FFFFFF" />}
-              <Text style={{ fontSize: 14, color: elegida ? '#FFFFFF' : colores.texto, fontWeight: elegida ? '600' : '400' }}>{opcion}</Text>
+              <Text style={{ flexShrink: 1, fontSize: 14, color: elegida ? '#FFFFFF' : colores.texto, fontWeight: elegida ? '600' : '400' }}>{opcion}</Text>
             </Tactil>
           );
         })}
